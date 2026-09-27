@@ -8,11 +8,18 @@ internal static class HttpFetch
 {
     private const int MaxAttempts = 3;
 
-    public static async Task<Result<string>> GetStringAsync(HttpClient http, Uri uri, CancellationToken cancellationToken)
+    public static Task<Result<string>> GetStringAsync(HttpClient http, Uri uri, CancellationToken cancellationToken) =>
+        GetStringAsync(http, uri, describeFailure: null, cancellationToken);
+
+    public static async Task<Result<string>> GetStringAsync(
+        HttpClient http,
+        Uri uri,
+        Func<HttpStatusCode, string?>? describeFailure,
+        CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
         {
-            var (result, transient) = await TryGetAsync(http, uri, cancellationToken);
+            var (result, transient) = await TryGetAsync(http, uri, describeFailure, cancellationToken);
             if (result.IsSuccess || !transient || attempt == MaxAttempts)
             {
                 return result;
@@ -25,6 +32,7 @@ internal static class HttpFetch
     private static async Task<(Result<string> Result, bool Transient)> TryGetAsync(
         HttpClient http,
         Uri uri,
+        Func<HttpStatusCode, string?>? describeFailure,
         CancellationToken cancellationToken)
     {
         try
@@ -37,9 +45,10 @@ internal static class HttpFetch
 
             var status = (int)response.StatusCode;
             var transient = status >= 500 || response.StatusCode == HttpStatusCode.TooManyRequests;
-            var error = response.StatusCode == HttpStatusCode.NotFound
-                ? "the service did not find the resource (HTTP 404)"
-                : string.Create(CultureInfo.InvariantCulture, $"the service answered HTTP {status}");
+            var error = describeFailure?.Invoke(response.StatusCode)
+                ?? (response.StatusCode == HttpStatusCode.NotFound
+                    ? "the service did not find the resource (HTTP 404)"
+                    : string.Create(CultureInfo.InvariantCulture, $"the service answered HTTP {status}"));
             return (Result.Failure<string>(error), transient);
         }
         catch (HttpRequestException)

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -49,6 +50,26 @@ internal sealed class TempDirectory : IDisposable
     }
 
     public void Dispose() => Directory.Delete(Path, recursive: true);
+}
+
+internal sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+{
+    public List<(Uri Uri, string? Body)> Requests { get; } = [];
+
+    public static StubHttpHandler Responding(HttpStatusCode status, string body = "") =>
+        new(_ => new HttpResponseMessage(status) { Content = new StringContent(body) });
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+        Requests.Add((request.RequestUri!, body));
+        return respond(request);
+    }
+}
+
+internal sealed class FixedTime(DateTimeOffset now) : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow() => now;
 }
 
 internal static class Dates

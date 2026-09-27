@@ -1,3 +1,4 @@
+using System.Net;
 using Lapse.Core;
 using Lapse.Core.Items;
 using Lapse.Core.Scanning;
@@ -19,9 +20,27 @@ public sealed class RdapSource(HttpClient http, RdapBootstrap bootstrap) : ISour
             return Result.Failure<Observation>(server.Error);
         }
 
-        var response = await HttpFetch.GetStringAsync(http, new Uri(server.Value, $"domain/{domain}"), cancellationToken);
+        var response = await HttpFetch.GetStringAsync(
+            http,
+            new Uri(server.Value, $"domain/{domain}"),
+            status => DescribeFailure(domain, status),
+            cancellationToken);
+
         return response
             .Bind(RdapParser.ParseExpiration)
             .Map(expiresAt => new Observation(domain, expiresAt, Fingerprint: null));
+    }
+
+    private static string? DescribeFailure(string domain, HttpStatusCode status)
+    {
+        if (status is not (HttpStatusCode.BadRequest or HttpStatusCode.NotFound))
+        {
+            return null;
+        }
+
+        var labels = domain.Split('.');
+        return labels.Length > 2
+            ? $"the registry has no domain named {domain}; if it is a subdomain, watch its registered domain instead, such as {string.Join('.', labels[1..])}"
+            : $"the registry has no domain named {domain}";
     }
 }
