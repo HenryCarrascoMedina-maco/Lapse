@@ -36,7 +36,7 @@ jobs:
           cp ../LICENSE ../README.md ../lapse.example.json .
           if [ "$RUNNER_OS" = "Windows" ]; then 7z a "../$name.zip" . ; else tar -czf "../$name.tar.gz" . ; fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.rid }}
           path: lapse-*
