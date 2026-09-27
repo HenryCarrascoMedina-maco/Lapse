@@ -10,7 +10,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <IsPackable>false</IsPackable>
 
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Authors>Henry Carrasco Medina</Authors>
     <Product>Lapse</Product>

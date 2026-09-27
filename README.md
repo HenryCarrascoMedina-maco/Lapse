@@ -2,38 +2,45 @@
 
 **Nothing in your organization should expire by surprise.**
 
-Lapse watches TLS certificates, domains and certificate files, warns their owner before they expire and verifies that they were actually renewed. It runs on your own machine or server: it does not store passwords and does not send data to any Lapse service, because there is none.
+Lapse watches TLS certificates, domains, Entra ID secrets, SAML certificates and certificate files, warns their owner before they expire and verifies that they were actually renewed. It runs on your own machine or server: it does not store passwords and does not send data to any Lapse service, because there is none.
+
+**[Try the live demo](https://henrycarrascomedina-maco.github.io/Lapse/demo.html)** Â· [Website](https://henrycarrascomedina-maco.github.io/Lapse/) Â· [Download](https://github.com/HenryCarrascoMedina-maco/Lapse/releases/latest)
 
 ```text
 $ lapse scan
-Scanning 8 items…
+Scanning 8 itemsâ€¦
 
  STATUS    ITEM                      KIND    EXPIRES     DAYS  OWNER
  EXPIRED   intranet.acme.local:443   tls     2026-09-25    -2  it
  CRITICAL  api.acme.com:443          tls     2026-10-03     6  it
  WARNING   acme.pe                   domain  2026-10-24    27  finance
  RENEWED   acme.com:443              tls     2027-03-20   174  it       was: 2026-10-02
- ERROR     vpn.acme.com:443          tls     —              —  it       no response within 10 s
+ ERROR     vpn.acme.com:443          tls     â€”              â€”  it       no response within 10 s
 
 3 unchanged items are hidden (use --all)
-Alerts sent: 3 · already sent before (skipped): 1
+Alerts sent: 3 Â· already sent before (skipped): 1
 ```
 
 ## Status
 
-**Version 0.1.0**, the first public release. It works and is tested, but the configuration format may change before 1.0 (see [versioning](#versioning)).
+**Version 0.2.0.** It works and is tested, but the configuration format may change before 1.0 (see [versioning](#versioning)).
 
 | Works today | Coming next |
 |---|---|
-| TLS certificates of any `host:port` speaking TLS directly | Web interface |
+| TLS certificates of any `host:port`, and STARTTLS for SMTP, IMAP, POP3 and PostgreSQL | Local web dashboard |
 | Domain expiration dates (RDAP) | Plugins in any language |
-| `.cer`, `.crt`, `.pem` and `.der` files | STARTTLS (SMTP, IMAP), SQL Server, RDP |
-| Manual items (licenses, contracts) | Entra ID, Azure Key Vault, AWS |
-| Discovery through Certificate Transparency | PostgreSQL and multiple users |
-| Owners, backups and alert thresholds | |
-| Email and webhook alerts, never duplicated | |
+| `.cer`, `.crt`, `.pem` and `.der` files | Azure Key Vault, AWS |
+| SAML signing and encryption certificates from metadata URLs | SQL Server, RDP |
+| Entra ID application secrets and certificates (**beta**) | PostgreSQL and multiple users |
+| Manual items (licenses, contracts) | |
+| Discovery through Certificate Transparency | |
+| Owners, backups and automatic owners for Entra applications | |
+| Email, webhook, Microsoft Teams and Telegram alerts, never duplicated | |
 | Renewal verification | |
+| Visual HTML report that works offline | |
 | `lapse check` for CI pipelines | |
+
+Entra ID support is **beta**: it is covered by tests against recorded Microsoft Graph responses, but it has not been used against many real tenants yet. Please [open an issue](https://github.com/HenryCarrascoMedina-maco/Lapse/issues/new/choose) with what you find.
 
 ## Why it exists
 
@@ -62,16 +69,16 @@ The full model is in [docs/security.md](docs/security.md). To report a vulnerabi
 
 | System | Archive |
 |---|---|
-| Windows x64 | `lapse-v0.1.0-win-x64.zip` |
-| Linux x64 | `lapse-v0.1.0-linux-x64.tar.gz` |
-| macOS Apple Silicon | `lapse-v0.1.0-osx-arm64.tar.gz` |
+| Windows x64 | `lapse-v0.2.0-win-x64.zip` |
+| Linux x64 | `lapse-v0.2.0-linux-x64.tar.gz` |
+| macOS Apple Silicon | `lapse-v0.2.0-osx-arm64.tar.gz` |
 
 Every release includes `SHA256SUMS` to verify the download and an SPDX SBOM.
 
 **Docker.**
 
 ```sh
-docker run --rm --read-only -v "$PWD:/data" ghcr.io/henrycarrascomedina-maco/lapse:0.1.0 scan
+docker run --rm --read-only -v "$PWD:/data" ghcr.io/henrycarrascomedina-maco/lapse:0.2.0 scan
 ```
 
 The image runs unprivileged and reads `lapse.json` from the `/data` volume, where it also keeps `lapse.db`.
@@ -124,41 +131,42 @@ Full reference: [docs/configuration.md](docs/configuration.md).
 | `lapse check` | Scans without alerting and fails if anything expires before `--min-days` (14 by default). Meant for CI. |
 | `lapse list` | Shows the last stored inventory without connecting to anything. |
 | `lapse export -o file.json` | Exports the inventory, for example as audit evidence. |
+| `lapse report` | Creates a visual HTML report with filters and search. It works offline and loads nothing from the internet. `--from` builds it from an export file. |
 | `lapse discover domain` | Searches Certificate Transparency for certificates issued to the domain. |
 | `lapse watch --every 6h` | Scans periodically and reloads the configuration on every cycle. |
 
 Common options: `-c, --config` (defaults to `lapse.json`) and `--db` (defaults to `lapse.db` next to the configuration).
 
-**Exit codes:** `0` success · `1` `check` found problems · `2` configuration error · `3` an alert could not be sent · `4` an external service did not answer.
+**Exit codes:** `0` success Â· `1` `check` found problems Â· `2` configuration error Â· `3` an alert could not be sent Â· `4` an external service did not answer.
 
 ### Scheduling
 
 - **Windows:** `schtasks /Create /SC HOURLY /MO 6 /TN Lapse /TR "C:\lapse\lapse.exe scan -c C:\lapse\lapse.json"`
 - **Linux or macOS (cron):** `0 */6 * * * /opt/lapse/lapse scan -c /etc/lapse/lapse.json`
-- **Docker:** `docker run -d --read-only -v lapse:/data -e LAPSE_SMTP_PASSWORD ghcr.io/henrycarrascomedina-maco/lapse:0.1.0` (runs `watch --every 6h` by default).
+- **Docker:** `docker run -d --read-only -v lapse:/data -e LAPSE_SMTP_PASSWORD ghcr.io/henrycarrascomedina-maco/lapse:0.2.0` (runs `watch --every 6h` by default).
 
 ### In a pipeline
 
 ```yaml
 - name: Certificates and domains
   run: |
-    curl -fsSL https://github.com/HenryCarrascoMedina-maco/Lapse/releases/download/v0.1.0/lapse-v0.1.0-linux-x64.tar.gz | tar -xz
+    curl -fsSL https://github.com/HenryCarrascoMedina-maco/Lapse/releases/download/v0.2.0/lapse-v0.2.0-linux-x64.tar.gz | tar -xz
     ./lapse check -c lapse.json --db "$RUNNER_TEMP/lapse.db" --min-days 14
 ```
 
 ## How it works
 
 ```text
-lapse.json ──► ConfigLoader ──► WatchPlan
-                                   │
-             ┌─────────────────────┼─────────────────────┐
-             ▼                     ▼                     ▼
-        TlsSource             RdapSource        CertificateFileSource …   (ISource)
-             └────────── Observation ───────────┘
-                                   ▼
-                              Reconciler  ──►  SQLite (lapse.db)
-                                   ▼
-                              AlertPlanner ──►  EmailNotifier · WebhookNotifier   (INotifier)
+lapse.json â”€â”€â–º ConfigLoader â”€â”€â–º WatchPlan
+                                   â”‚
+             â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+             â–¼                     â–¼                     â–¼
+        TlsSource             RdapSource        CertificateFileSource â€¦   (ISource)
+             â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Observation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                                   â–¼
+                              Reconciler  â”€â”€â–º  SQLite (lapse.db)
+                                   â–¼
+                              AlertPlanner â”€â”€â–º  EmailNotifier Â· WebhookNotifier   (INotifier)
 ```
 
 The code has three projects and one strict rule: **the core depends on nothing.**
