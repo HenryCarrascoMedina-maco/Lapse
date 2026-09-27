@@ -115,6 +115,31 @@ public class ScanPipelineTests
         Assert.Empty(store.Items);
     }
 
+    [Fact]
+    public async Task Failing_target_keeps_every_item_it_produced()
+    {
+        source.Yields(Host, ("secret-a", time.Now.AddDays(40)), ("secret-b", time.Now.AddDays(50)));
+        await RunAsync();
+
+        source.Fails(Host, "token rejected");
+        var report = await RunAsync();
+
+        Assert.Equal(2, store.Items.Count);
+        Assert.All(report.Entries, entry => Assert.Equal(ScanOutcome.Failed, entry.Outcome));
+    }
+
+    [Fact]
+    public async Task Items_that_disappear_from_a_target_are_forgotten()
+    {
+        source.Yields(Host, ("secret-a", time.Now.AddDays(40)), ("secret-b", time.Now.AddDays(50)));
+        await RunAsync();
+
+        source.Yields(Host, ("secret-a", time.Now.AddDays(40)));
+        await RunAsync();
+
+        Assert.Equal(["secret-a"], store.Items.Keys.Select(key => key.Value));
+    }
+
     private ScanPipeline Pipeline() => new([source], [email, webhook], store, time);
 
     private Task<ScanReport> RunAsync(bool notify = true) => Pipeline().RunAsync(plan, notify, CancellationToken.None);

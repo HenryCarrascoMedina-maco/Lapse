@@ -11,13 +11,13 @@ public sealed class RdapSource(HttpClient http, RdapBootstrap bootstrap) : ISour
 {
     public ItemKind Kind => ItemKind.Domain;
 
-    public async Task<Result<Observation>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken)
+    public async Task<Result<IReadOnlyList<Observation>>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken)
     {
         var domain = target.Key.Value;
         var server = await bootstrap.FindServerAsync(domain);
         if (!server.IsSuccess)
         {
-            return Result.Failure<Observation>(server.Error);
+            return Result.Failure<IReadOnlyList<Observation>>(server.Error);
         }
 
         var response = await HttpFetch.GetStringAsync(
@@ -28,7 +28,8 @@ public sealed class RdapSource(HttpClient http, RdapBootstrap bootstrap) : ISour
 
         return response
             .Bind(RdapParser.ParseExpiration)
-            .Map(expiresAt => new Observation(domain, expiresAt, Fingerprint: null));
+            .Map(expiresAt => new Observation(target.Key, domain, expiresAt, Fingerprint: null))
+            .AsList();
     }
 
     private static string? DescribeFailure(string domain, HttpStatusCode status)

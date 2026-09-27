@@ -7,7 +7,7 @@ public interface ISource
 {
     ItemKind Kind { get; }
 
-    Task<Result<Observation>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken);
+    Task<Result<IReadOnlyList<Observation>>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken);
 }
 
 public interface IItemStore
@@ -19,4 +19,10 @@ public interface IItemStore
     Task<bool> WasAlertSentAsync(AlertRecord record, CancellationToken cancellationToken);
 
     Task RecordAlertSentAsync(AlertRecord record, DateTimeOffset sentAt, CancellationToken cancellationToken);
+}
+
+public static class ObservationResults
+{
+    public static Result<IReadOnlyList<Observation>> AsList(this Result<Observation> result) =>
+        result.Map<IReadOnlyList<Observation>>(observation => [observation]);
 }

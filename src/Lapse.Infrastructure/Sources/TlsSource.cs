@@ -11,10 +11,10 @@ public sealed class TlsSource(TimeSpan timeout) : ISource
 
     public ItemKind Kind => ItemKind.Tls;
 
-    public async Task<Result<Observation>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken)
+    public async Task<Result<IReadOnlyList<Observation>>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken)
     {
         var endpoint = HostEndpoint.Parse(target.Key.Value);
         var certificate = await TlsProbe.FetchCertificateAsync(endpoint, timeout, cancellationToken);
-        return certificate.Bind(content => CertificateReader.Observe(target.Key.Value, content));
+        return certificate.Bind(content => CertificateReader.Observe(target.Key, target.Key.Value, content)).AsList();
     }
 }

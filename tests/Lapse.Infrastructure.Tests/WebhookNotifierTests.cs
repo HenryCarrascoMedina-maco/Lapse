@@ -54,7 +54,8 @@ public class WebhookNotifierTests
     private static PlannedAlert Alert()
     {
         var expiresAt = Dates.Now.AddDays(5).AddHours(1);
-        var item = new Item(new ItemKey(ItemKind.Tls, "api.example.com:443"), "api.example.com:443", "it", expiresAt, ItemStatus.Active, Dates.Now, null);
+        var key = new ItemKey(ItemKind.Tls, "api.example.com:443");
+        var item = new Item(key, key, "api.example.com:443", "it", expiresAt, ItemStatus.Active, Dates.Now, null);
         return new PlannedAlert(item, AlertKind.Threshold, 7, 5, expiresAt, [new Owner("it", "it@example.com", null)], null);
     }
 }

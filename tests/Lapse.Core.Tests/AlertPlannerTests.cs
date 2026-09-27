@@ -66,7 +66,7 @@ public class AlertPlannerTests
     private static Reconciliation Reconciled(int daysRemaining, ScanOutcome outcome)
     {
         var expiresAt = Now.AddDays(daysRemaining).AddHours(1);
-        var item = new Item(Target.Key, Target.Key.Value, "ana", expiresAt, ItemStatus.Active, Now, null);
+        var item = new Item(Target.Key, Target.Key, Target.Key.Value, "ana", expiresAt, ItemStatus.Active, Now, null);
         return new Reconciliation(item, outcome, Now.AddDays(-10), Observation: null);
     }
 }

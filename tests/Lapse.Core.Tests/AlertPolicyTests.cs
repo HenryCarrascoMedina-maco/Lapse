@@ -38,7 +38,7 @@ public class AlertPolicyTests
     [Fact]
     public void Failing_item_is_reported_as_error_even_if_it_expires_soon()
     {
-        var item = new Item(new ItemKey(ItemKind.Tls, "a:443"), "a", "ana", Now.AddDays(1), ItemStatus.Failing, Now, "no response");
+        var item = new Item(new ItemKey(ItemKind.Tls, "a:443"), new ItemKey(ItemKind.Tls, "a:443"), "a", "ana", Now.AddDays(1), ItemStatus.Failing, Now, "no response");
 
         Assert.Equal(ItemHealth.Error, Policy.HealthOf(item, Now));
     }
@@ -46,7 +46,7 @@ public class AlertPolicyTests
     [Fact]
     public void Renewed_item_that_still_expires_soon_is_reported_by_urgency()
     {
-        var item = new Item(new ItemKey(ItemKind.Tls, "a:443"), "a", "ana", Now.AddDays(3), ItemStatus.Renewed, Now, null);
+        var item = new Item(new ItemKey(ItemKind.Tls, "a:443"), new ItemKey(ItemKind.Tls, "a:443"), "a", "ana", Now.AddDays(3), ItemStatus.Renewed, Now, null);
 
         Assert.Equal(ItemHealth.Critical, Policy.HealthOf(item, Now));
     }

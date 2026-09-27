@@ -11,19 +11,18 @@ public class ReconcilerTests
     [Fact]
     public void First_observation_creates_a_new_item()
     {
-        var result = Reconciler.Reconcile(null, Target, Observed(Now.AddDays(30)), Now);
+        var result = Single([], Observed((Target.Key.Value, Now.AddDays(30))));
 
         Assert.Equal(ScanOutcome.New, result.Outcome);
         Assert.Equal(ItemStatus.Active, result.Item.Status);
+        Assert.Equal(Target.Key, result.Item.Target);
         Assert.Equal(Now.AddDays(30), result.Item.ExpiresAt);
     }
 
     [Fact]
     public void Later_expiry_is_a_verified_renewal()
     {
-        var existing = Existing(Now.AddDays(5));
-
-        var result = Reconciler.Reconcile(existing, Target, Observed(Now.AddDays(90)), Now);
+        var result = Single([Existing(Target.Key.Value, Now.AddDays(5))], Observed((Target.Key.Value, Now.AddDays(90))));
 
         Assert.Equal(ScanOutcome.Renewed, result.Outcome);
         Assert.Equal(ItemStatus.Renewed, result.Item.Status);
@@ -31,25 +30,17 @@ public class ReconcilerTests
     }
 
     [Fact]
-    public void Earlier_expiry_is_reported_as_a_change()
-    {
-        var result = Reconciler.Reconcile(Existing(Now.AddDays(90)), Target, Observed(Now.AddDays(10)), Now);
-
-        Assert.Equal(ScanOutcome.Changed, result.Outcome);
-    }
+    public void Earlier_expiry_is_reported_as_a_change() =>
+        Assert.Equal(ScanOutcome.Changed, Single([Existing(Target.Key.Value, Now.AddDays(90))], Observed((Target.Key.Value, Now.AddDays(10)))).Outcome);
 
     [Fact]
-    public void Same_expiry_is_unchanged()
-    {
-        var result = Reconciler.Reconcile(Existing(Now.AddDays(10)), Target, Observed(Now.AddDays(10)), Now);
-
-        Assert.Equal(ScanOutcome.Unchanged, result.Outcome);
-    }
+    public void Same_expiry_is_unchanged() =>
+        Assert.Equal(ScanOutcome.Unchanged, Single([Existing(Target.Key.Value, Now.AddDays(10))], Observed((Target.Key.Value, Now.AddDays(10)))).Outcome);
 
     [Fact]
     public void Failure_keeps_the_last_known_expiry()
     {
-        var result = Reconciler.Reconcile(Existing(Now.AddDays(10)), Target, Result.Failure<Observation>("no response"), Now);
+        var result = Single([Existing(Target.Key.Value, Now.AddDays(10))], Result.Failure<IReadOnlyList<Observation>>("no response"));
 
         Assert.Equal(ScanOutcome.Failed, result.Outcome);
         Assert.Equal(ItemStatus.Failing, result.Item.Status);
@@ -59,18 +50,55 @@ public class ReconcilerTests
     }
 
     [Fact]
-    public void First_success_after_failures_counts_as_new()
+    public void First_failure_is_reported_on_the_target_itself()
     {
-        var failing = Existing(expiresAt: null) with { Status = ItemStatus.Failing };
+        var result = Single([], Result.Failure<IReadOnlyList<Observation>>("no response"));
 
-        var result = Reconciler.Reconcile(failing, Target, Observed(Now.AddDays(10)), Now);
-
-        Assert.Equal(ScanOutcome.New, result.Outcome);
+        Assert.Equal(Target.Key, result.Item.Key);
+        Assert.Null(result.Item.ExpiresAt);
     }
 
-    private static Result<Observation> Observed(DateTimeOffset expiresAt) =>
-        Result.Success(new Observation(Target.Key.Value, expiresAt, "sha256"));
+    [Fact]
+    public void First_success_after_failures_counts_as_new()
+    {
+        var failing = Existing(Target.Key.Value, expiresAt: null) with { Status = ItemStatus.Failing };
 
-    private static Item Existing(DateTimeOffset? expiresAt) =>
-        new(Target.Key, Target.Key.Value, "ana", expiresAt, ItemStatus.Active, Now.AddDays(-1), LastError: null);
+        Assert.Equal(ScanOutcome.New, Single([failing], Observed((Target.Key.Value, Now.AddDays(10)))).Outcome);
+    }
+
+    [Fact]
+    public void One_target_can_produce_several_items()
+    {
+        var results = Reconciler.Reconcile(
+            [Existing("secret-a", Now.AddDays(5)), Existing("secret-gone", Now.AddDays(9))],
+            Target,
+            Observed(("secret-a", Now.AddDays(5)), ("secret-b", Now.AddDays(60))),
+            Now);
+
+        Assert.Equal(["secret-a", "secret-b"], results.Select(result => result.Item.Key.Value));
+        Assert.Equal([ScanOutcome.Unchanged, ScanOutcome.New], results.Select(result => result.Outcome));
+    }
+
+    [Fact]
+    public void Failure_keeps_every_item_of_the_target()
+    {
+        var results = Reconciler.Reconcile(
+            [Existing("secret-a", Now.AddDays(5)), Existing("secret-b", Now.AddDays(60))],
+            Target,
+            Result.Failure<IReadOnlyList<Observation>>("token rejected"),
+            Now);
+
+        Assert.Equal(["secret-a", "secret-b"], results.Select(result => result.Item.Key.Value));
+        Assert.All(results, result => Assert.Equal(ScanOutcome.Failed, result.Outcome));
+    }
+
+    private static Reconciliation Single(IReadOnlyCollection<Item> existing, Result<IReadOnlyList<Observation>> result) =>
+        Assert.Single(Reconciler.Reconcile(existing, Target, result, Now));
+
+    private static Result<IReadOnlyList<Observation>> Observed(params (string Key, DateTimeOffset ExpiresAt)[] items) =>
+        Result.Success<IReadOnlyList<Observation>>(
+            [.. items.Select(item => new Observation(new ItemKey(ItemKind.Tls, item.Key), item.Key, item.ExpiresAt, "sha256"))]);
+
+    private static Item Existing(string key, DateTimeOffset? expiresAt) =>
+        new(new ItemKey(ItemKind.Tls, key), Target.Key, key, "ana", expiresAt, ItemStatus.Active, Now.AddDays(-1), LastError: null);
 }

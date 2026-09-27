@@ -9,6 +9,6 @@ public sealed class CertificateFileSource : ISource
 {
     public ItemKind Kind => ItemKind.File;
 
-    public Task<Result<Observation>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken) =>
-        CertificateReader.ObserveFileAsync(target.Key.Value, cancellationToken);
+    public async Task<Result<IReadOnlyList<Observation>>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken) =>
+        (await CertificateReader.ObserveFileAsync(target.Key, cancellationToken)).AsList();
 }

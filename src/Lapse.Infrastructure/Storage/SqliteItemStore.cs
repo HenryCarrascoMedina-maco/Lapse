@@ -8,10 +8,10 @@ namespace Lapse.Infrastructure.Storage;
 public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
 {
     private const string UpsertItem = """
-        INSERT INTO items (kind, key, name, owner, expires_at, status, last_scanned_at, last_error)
-        VALUES ($kind, $key, $name, $owner, $expiresAt, $status, $scannedAt, $error)
+        INSERT INTO items (kind, key, target_kind, target_key, name, owner, expires_at, status, last_scanned_at, last_error)
+        VALUES ($kind, $key, $targetKind, $targetKey, $name, $owner, $expiresAt, $status, $scannedAt, $error)
         ON CONFLICT (kind, key) DO UPDATE SET
-            name = excluded.name, owner = excluded.owner, expires_at = excluded.expires_at,
+            target_kind = excluded.target_kind, target_key = excluded.target_key, name = excluded.name, owner = excluded.owner, expires_at = excluded.expires_at,
             status = excluded.status, last_scanned_at = excluded.last_scanned_at, last_error = excluded.last_error
         RETURNING id
         """;
@@ -32,20 +32,21 @@ public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
     public async Task<IReadOnlyDictionary<ItemKey, Item>> GetItemsAsync(CancellationToken cancellationToken)
     {
         await using var command = connection.Command(
-            "SELECT kind, key, name, owner, expires_at, status, last_scanned_at, last_error FROM items");
+            "SELECT kind, key, target_kind, target_key, name, owner, expires_at, status, last_scanned_at, last_error FROM items");
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var items = new Dictionary<ItemKey, Item>();
         while (await reader.ReadAsync(cancellationToken))
         {
             var item = new Item(
-                new ItemKey(Enum.Parse<ItemKind>(reader.GetString(0), ignoreCase: true), reader.GetString(1)),
-                reader.GetString(2),
-                reader.GetString(3),
-                reader.IsDBNull(4) ? null : SqliteDatabase.Parse(reader.GetString(4)),
-                Enum.Parse<ItemStatus>(reader.GetString(5), ignoreCase: true),
-                SqliteDatabase.Parse(reader.GetString(6)),
-                reader.IsDBNull(7) ? null : reader.GetString(7));
+                KeyAt(reader, 0),
+                KeyAt(reader, 2),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : SqliteDatabase.Parse(reader.GetString(6)),
+                Enum.Parse<ItemStatus>(reader.GetString(7), ignoreCase: true),
+                SqliteDatabase.Parse(reader.GetString(8)),
+                reader.IsDBNull(9) ? null : reader.GetString(9));
             items[item.Key] = item;
         }
 
@@ -109,6 +110,9 @@ public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
         ("$channel", record.Channel),
     ];
 
+    private static ItemKey KeyAt(SqliteDataReader reader, int ordinal) =>
+        new(Enum.Parse<ItemKind>(reader.GetString(ordinal), ignoreCase: true), reader.GetString(ordinal + 1));
+
     private static string Code<TEnum>(TEnum value)
         where TEnum : struct, Enum => value.ToString().ToLowerInvariant();
 
@@ -119,6 +123,8 @@ public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
             transaction,
             ("$kind", Code(item.Key.Kind)),
             ("$key", item.Key.Value),
+            ("$targetKind", Code(item.Target.Kind)),
+            ("$targetKey", item.Target.Value),
             ("$name", item.Name),
             ("$owner", item.Owner),
             ("$expiresAt", item.ExpiresAt is { } expiresAt ? SqliteDatabase.Format(expiresAt) : null),

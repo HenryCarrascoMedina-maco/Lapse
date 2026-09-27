@@ -22,7 +22,7 @@ public sealed class TlsSourceTests : IAsyncDisposable
         var result = await source.ObserveAsync(Target(Port), CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Error);
-        Dates.AssertSameSecond(notAfter, result.Value.ExpiresAt);
+        Dates.AssertSameSecond(notAfter, Assert.Single(result.Value).ExpiresAt);
         await server;
     }
 
@@ -36,7 +36,7 @@ public sealed class TlsSourceTests : IAsyncDisposable
         var result = await source.ObserveAsync(Target(Port), CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Error);
-        Dates.AssertSameSecond(notAfter, result.Value.ExpiresAt);
+        Dates.AssertSameSecond(notAfter, Assert.Single(result.Value).ExpiresAt);
         await server;
     }
 

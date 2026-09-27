@@ -1,4 +1,5 @@
 using System.Text;
+using Lapse.Core.Items;
 using Lapse.Infrastructure.Certificates;
 
 namespace Lapse.Infrastructure.Tests;
@@ -14,7 +15,7 @@ public sealed class CertificateReaderTests : IDisposable
         using var certificate = TestCertificates.Create(notAfter);
         var path = directory.Write("invoicing.cer", TestCertificates.Der(certificate));
 
-        var result = await CertificateReader.ObserveFileAsync(path, CancellationToken.None);
+        var result = await CertificateReader.ObserveFileAsync(FileKey(path), CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Error);
         Assert.Equal("invoicing.cer", result.Value.Name);
@@ -28,7 +29,7 @@ public sealed class CertificateReaderTests : IDisposable
         using var certificate = TestCertificates.Create(notAfter);
         var path = directory.Write("api.pem", TestCertificates.Pem(certificate));
 
-        var result = await CertificateReader.ObserveFileAsync(path, CancellationToken.None);
+        var result = await CertificateReader.ObserveFileAsync(FileKey(path), CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Error);
         Dates.AssertSameSecond(notAfter, result.Value.ExpiresAt);
@@ -40,7 +41,7 @@ public sealed class CertificateReaderTests : IDisposable
         using var certificate = TestCertificates.Create(notAfter);
         var path = directory.Write("bundle.pem", TestCertificates.PemWithPrivateKey(certificate));
 
-        var result = await CertificateReader.ObserveFileAsync(path, CancellationToken.None);
+        var result = await CertificateReader.ObserveFileAsync(FileKey(path), CancellationToken.None);
 
         Assert.Equal(CertificateReader.PrivateKeyRejection, result.Error);
     }
@@ -51,7 +52,7 @@ public sealed class CertificateReaderTests : IDisposable
         using var certificate = TestCertificates.Create(notAfter);
         var path = directory.Write("disguised.cer", TestCertificates.Pkcs12(certificate));
 
-        var result = await CertificateReader.ObserveFileAsync(path, CancellationToken.None);
+        var result = await CertificateReader.ObserveFileAsync(FileKey(path), CancellationToken.None);
 
         Assert.Equal(CertificateReader.PrivateKeyRejection, result.Error);
     }
@@ -64,22 +65,24 @@ public sealed class CertificateReaderTests : IDisposable
     {
         var path = directory.Write(name, "content that is never read");
 
-        var result = await CertificateReader.ObserveFileAsync(path, CancellationToken.None);
+        var result = await CertificateReader.ObserveFileAsync(FileKey(path), CancellationToken.None);
 
         Assert.Equal(CertificateReader.PrivateKeyRejection, result.Error);
     }
 
     [Fact]
     public void Rejects_content_that_is_not_a_certificate() =>
-        Assert.False(CertificateReader.Observe("x.cer", Encoding.ASCII.GetBytes("not a certificate")).IsSuccess);
+        Assert.False(CertificateReader.Observe(FileKey("x.cer"), "x.cer", Encoding.ASCII.GetBytes("not a certificate")).IsSuccess);
 
     [Fact]
     public async Task Reports_a_missing_file()
     {
-        var result = await CertificateReader.ObserveFileAsync(directory.File("missing.cer"), CancellationToken.None);
+        var result = await CertificateReader.ObserveFileAsync(FileKey(directory.File("missing.cer")), CancellationToken.None);
 
         Assert.Equal("The file does not exist.", result.Error);
     }
 
     public void Dispose() => directory.Dispose();
+
+    private static ItemKey FileKey(string path) => new(ItemKind.File, path);
 }

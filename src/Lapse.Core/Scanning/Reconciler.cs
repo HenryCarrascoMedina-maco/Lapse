@@ -19,26 +19,36 @@ public sealed record Reconciliation(
 
 public static class Reconciler
 {
-    public static Reconciliation Reconcile(Item? existing, WatchTarget target, Result<Observation> result, DateTimeOffset now)
+    public static IReadOnlyList<Reconciliation> Reconcile(
+        IReadOnlyCollection<Item> existing,
+        WatchTarget target,
+        Result<IReadOnlyList<Observation>> result,
+        DateTimeOffset now)
     {
-        var previousExpiry = existing?.ExpiresAt;
-
         if (!result.IsSuccess)
         {
-            var failing = new Item(
-                target.Key,
-                existing?.Name ?? target.Name,
-                target.Owner,
-                previousExpiry,
-                ItemStatus.Failing,
-                now,
-                result.Error);
-            return new Reconciliation(failing, ScanOutcome.Failed, previousExpiry, Observation: null);
+            var known = existing.Count > 0 ? existing : [Placeholder(target, now)];
+            return [.. known.Select(item => Failed(item, result.Error, now))];
         }
 
-        var observation = result.Value;
-        var outcome = OutcomeOf(previousExpiry, observation.ExpiresAt);
+        var previous = existing.ToDictionary(item => item.Key);
+        return [.. result.Value.Select(observation => Observed(previous.GetValueOrDefault(observation.Key), target, observation, now))];
+    }
+
+    private static Item Placeholder(WatchTarget target, DateTimeOffset now) =>
+        new(target.Key, target.Key, target.Name, target.Owner, ExpiresAt: null, ItemStatus.Failing, now, LastError: null);
+
+    private static Reconciliation Failed(Item item, string error, DateTimeOffset now) => new(
+        item with { Status = ItemStatus.Failing, LastScannedAt = now, LastError = error },
+        ScanOutcome.Failed,
+        item.ExpiresAt,
+        Observation: null);
+
+    private static Reconciliation Observed(Item? previous, WatchTarget target, Observation observation, DateTimeOffset now)
+    {
+        var outcome = OutcomeOf(previous?.ExpiresAt, observation.ExpiresAt);
         var item = new Item(
+            observation.Key,
             target.Key,
             observation.Name,
             target.Owner,
@@ -46,7 +56,7 @@ public static class Reconciler
             outcome == ScanOutcome.Renewed ? ItemStatus.Renewed : ItemStatus.Active,
             now,
             LastError: null);
-        return new Reconciliation(item, outcome, previousExpiry, observation);
+        return new Reconciliation(item, outcome, previous?.ExpiresAt, observation);
     }
 
     private static ScanOutcome OutcomeOf(DateTimeOffset? previous, DateTimeOffset current) => previous switch

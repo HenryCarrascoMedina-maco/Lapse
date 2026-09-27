@@ -18,7 +18,7 @@ public sealed class RdapSourceTests : IDisposable
 
         var result = await source.ObserveAsync(Target("netlify.app"), CancellationToken.None);
 
-        Assert.Equal(new DateTimeOffset(2031, 5, 8, 0, 0, 0, TimeSpan.Zero), result.Value.ExpiresAt);
+        Assert.Equal(new DateTimeOffset(2031, 5, 8, 0, 0, 0, TimeSpan.Zero), Assert.Single(result.Value).ExpiresAt);
     }
 
     [Theory]

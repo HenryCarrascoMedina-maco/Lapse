@@ -17,8 +17,9 @@ public static class CertificateReader
 
     public static bool HasPrivateKeyExtension(string path) => PrivateKeyExtensions.Contains(Path.GetExtension(path));
 
-    public static async Task<Result<Observation>> ObserveFileAsync(string path, CancellationToken cancellationToken)
+    public static async Task<Result<Observation>> ObserveFileAsync(ItemKey key, CancellationToken cancellationToken)
     {
+        var path = key.Value;
         if (HasPrivateKeyExtension(path))
         {
             return Result.Failure<Observation>(PrivateKeyRejection);
@@ -38,7 +39,7 @@ public static class CertificateReader
         try
         {
             var content = await File.ReadAllBytesAsync(path, cancellationToken);
-            return Observe(file.Name, content);
+            return Observe(key, file.Name, content);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -46,7 +47,7 @@ public static class CertificateReader
         }
     }
 
-    public static Result<Observation> Observe(string name, byte[] content)
+    public static Result<Observation> Observe(ItemKey key, string name, byte[] content)
     {
         try
         {
@@ -63,7 +64,7 @@ public static class CertificateReader
 
             var expiresAt = new DateTimeOffset(certificate.NotAfter).ToUniversalTime();
             var fingerprint = certificate.GetCertHashString(HashAlgorithmName.SHA256);
-            return Result.Success(new Observation(name, expiresAt, fingerprint));
+            return Result.Success(new Observation(key, name, expiresAt, fingerprint));
         }
         catch (CryptographicException)
         {

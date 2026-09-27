@@ -14,17 +14,20 @@ internal sealed class FakeTime(DateTimeOffset now) : TimeProvider
 
 internal sealed class FakeSource(ItemKind kind) : ISource
 {
-    public Dictionary<string, Result<Observation>> Results { get; } = [];
+    public Dictionary<string, Result<IReadOnlyList<Observation>>> Results { get; } = [];
 
     public ItemKind Kind => kind;
 
-    public Task<Result<Observation>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken) =>
+    public Task<Result<IReadOnlyList<Observation>>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken) =>
         Task.FromResult(Results[target.Key.Value]);
 
-    public void Expires(string key, DateTimeOffset expiresAt) =>
-        Results[key] = Result.Success(new Observation(key, expiresAt, Fingerprint: null));
+    public void Expires(string target, DateTimeOffset expiresAt) => Yields(target, (target, expiresAt));
 
-    public void Fails(string key, string error) => Results[key] = Result.Failure<Observation>(error);
+    public void Yields(string target, params (string Key, DateTimeOffset ExpiresAt)[] items) =>
+        Results[target] = Result.Success<IReadOnlyList<Observation>>(
+            [.. items.Select(item => new Observation(new ItemKey(kind, item.Key), item.Key, item.ExpiresAt, Fingerprint: null))]);
+
+    public void Fails(string target, string error) => Results[target] = Result.Failure<IReadOnlyList<Observation>>(error);
 }
 
 internal sealed class RecordingNotifier(string channel) : INotifier

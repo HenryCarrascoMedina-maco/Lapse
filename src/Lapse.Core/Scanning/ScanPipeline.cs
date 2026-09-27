@@ -44,8 +44,9 @@ public sealed class ScanPipeline
         var existing = await store.GetItemsAsync(cancellationToken);
         var results = await ObserveAllAsync(plan.Targets, cancellationToken);
 
+        var existingByTarget = existing.Values.ToLookup(item => item.Target);
         var reconciliations = plan.Targets
-            .Select((target, index) => Reconciler.Reconcile(existing.GetValueOrDefault(target.Key), target, results[index], now))
+            .SelectMany((target, index) => Reconciler.Reconcile([.. existingByTarget[target.Key]], target, results[index], now))
             .ToList();
 
         await store.ReplaceInventoryAsync(reconciliations, cancellationToken);
@@ -57,9 +58,9 @@ public sealed class ScanPipeline
         return new ScanReport(now, reconciliations, delivery);
     }
 
-    private async Task<Result<Observation>[]> ObserveAllAsync(IReadOnlyList<WatchTarget> targets, CancellationToken cancellationToken)
+    private async Task<Result<IReadOnlyList<Observation>>[]> ObserveAllAsync(IReadOnlyList<WatchTarget> targets, CancellationToken cancellationToken)
     {
-        var results = new Result<Observation>[targets.Count];
+        var results = new Result<IReadOnlyList<Observation>>[targets.Count];
         var options = new ParallelOptions { MaxDegreeOfParallelism = maxParallelism, CancellationToken = cancellationToken };
 
         await Parallel.ForEachAsync(Enumerable.Range(0, targets.Count), options, async (index, token) =>
@@ -68,10 +69,10 @@ public sealed class ScanPipeline
         return results;
     }
 
-    private Task<Result<Observation>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken) =>
+    private Task<Result<IReadOnlyList<Observation>>> ObserveAsync(WatchTarget target, CancellationToken cancellationToken) =>
         sources.TryGetValue(target.Key.Kind, out var source)
             ? source.ObserveAsync(target, cancellationToken)
-            : Task.FromResult(Result.Failure<Observation>($"No source is registered for '{target.Key.Kind.Label()}'."));
+            : Task.FromResult(Result.Failure<IReadOnlyList<Observation>>($"No source is registered for '{target.Key.Kind.Label()}'."));
 
     private async Task<DeliverySummary> DeliverAsync(
         IEnumerable<Reconciliation> reconciliations,
