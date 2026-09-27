@@ -140,6 +140,20 @@ public class ScanPipelineTests
         Assert.Equal(["secret-a"], store.Items.Keys.Select(key => key.Value));
     }
 
+    [Fact]
+    public async Task Items_are_assigned_to_the_owner_whose_email_matches_a_contact()
+    {
+        source.Results[Host] = Result.Success<IReadOnlyList<Observation>>(
+        [
+            new Observation(new ItemKey(ItemKind.Tls, "secret-a"), "secret-a", time.Now.AddDays(40), null, ["IT@example.com"]),
+            new Observation(new ItemKey(ItemKind.Tls, "secret-b"), "secret-b", time.Now.AddDays(40), null, ["stranger@example.com"]),
+        ]);
+
+        var report = await RunAsync();
+
+        Assert.Equal(["it", "ana"], report.Entries.Select(entry => entry.Item.Owner));
+    }
+
     private ScanPipeline Pipeline() => new([source], [email, webhook], store, time);
 
     private Task<ScanReport> RunAsync(bool notify = true) => Pipeline().RunAsync(plan, notify, CancellationToken.None);

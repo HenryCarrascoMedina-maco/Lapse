@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Added
 
 - STARTTLS targets: `smtp://`, `imap://`, `pop3://` and `postgres://`.
+- `watch.entra`: secrets and certificates of Microsoft Entra ID application registrations, read with the `Application.Read.All` permission. Application owners whose email matches a configured owner receive their alerts.
 
 ### Changed
 

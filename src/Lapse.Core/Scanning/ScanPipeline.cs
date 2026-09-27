@@ -46,7 +46,12 @@ public sealed class ScanPipeline
 
         var existingByTarget = existing.Values.ToLookup(item => item.Target);
         var reconciliations = plan.Targets
-            .SelectMany((target, index) => Reconciler.Reconcile([.. existingByTarget[target.Key]], target, results[index], now))
+            .SelectMany((target, index) => Reconciler.Reconcile(
+                [.. existingByTarget[target.Key]],
+                target,
+                results[index],
+                now,
+                observation => plan.OwnerFor(target, observation)))
             .ToList();
 
         await store.ReplaceInventoryAsync(reconciliations, cancellationToken);

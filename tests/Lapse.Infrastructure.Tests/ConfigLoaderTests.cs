@@ -108,6 +108,30 @@ public sealed class ConfigLoaderTests : IDisposable
     }
 
     [Fact]
+    public async Task Loads_entra_tenants_with_their_secret_reference()
+    {
+        environment["ENTRA"] = "entra-secret";
+
+        var result = await LoadAsync(Minimal(watch: """{ "entra": [ { "tenantId": "Contoso.onmicrosoft.com", "clientId": "app-1", "clientSecret": "${env:ENTRA}", "name": "Contoso" } ] }"""));
+
+        Assert.True(result.IsSuccess, result.Error);
+        var target = Assert.Single(result.Value.Plan.Targets);
+        Assert.Equal("entra:contoso.onmicrosoft.com", target.Key.ToString());
+        Assert.Equal("Contoso", target.Name);
+        var tenant = Assert.Single(result.Value.EntraTenants);
+        Assert.Equal("entra-secret", tenant.ClientSecret.Reveal());
+    }
+
+    [Fact]
+    public async Task Rejects_an_entra_secret_written_in_plain_text()
+    {
+        var result = await LoadAsync(Minimal(watch: """{ "entra": [ { "tenantId": "t", "clientId": "c", "clientSecret": "plain-entra-secret" } ] }"""));
+
+        Assert.Contains("watch.entra[0]: clientSecret: do not write secrets", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("plain-entra-secret", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Explains_how_to_create_a_missing_file()
     {
         var result = await ConfigLoader.LoadAsync(directory.File("missing.json"), Read, CancellationToken.None);

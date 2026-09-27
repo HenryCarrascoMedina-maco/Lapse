@@ -6,6 +6,7 @@ public enum ItemKind
     Domain,
     File,
     Manual,
+    Entra,
 }
 
 public static class ItemKindExtensions
@@ -16,6 +17,7 @@ public static class ItemKindExtensions
         ItemKind.Domain => "domain",
         ItemKind.File => "file",
         ItemKind.Manual => "manual",
+        ItemKind.Entra => "entra",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 }

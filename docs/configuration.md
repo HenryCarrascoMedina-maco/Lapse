@@ -98,6 +98,29 @@ What cannot be discovered automatically: licenses, contracts, insurance policies
 | `expiresAt` | yes | Date (`2026-12-24`) or ISO 8601 date and time. Without a time zone, UTC is assumed. |
 | `owner` | no | Owner. |
 
+### `entra`
+
+Secrets and certificates of the application registrations in a Microsoft Entra ID tenant.
+
+```json
+"entra": [
+  { "tenantId": "contoso.onmicrosoft.com", "clientId": "00000000-0000-0000-0000-000000000000",
+    "clientSecret": "${env:LAPSE_ENTRA_SECRET}", "name": "Contoso", "owner": "it" }
+]
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `tenantId` | yes | Tenant ID or primary domain. |
+| `clientId` | yes | Application (client) ID of the registration Lapse uses. |
+| `clientSecret` | yes | **Reference** to that registration's client secret. |
+| `name` | no | Name shown for the tenant when it cannot be read. |
+| `owner` | no | Owner of the credentials whose application has no matching owner. |
+
+To set it up, create an application registration for Lapse, grant it the **Application.Read.All** *application* permission, give admin consent and create a client secret. Lapse lists every application with its secrets and certificates; it never changes anything.
+
+Each credential becomes an item such as `ERP Sync · secret prod`. If one of the application's owners in Entra has the same email as an owner in `owners`, that owner receives its alerts. If the tenant cannot be read, its items are kept and shown as `ERROR` instead of disappearing.
+
 ## `notify`
 
 Without channels, `scan` works the same but sends no alerts.
@@ -139,7 +162,7 @@ Lapse sends a `POST` with this JSON:
 
 ## Secret references
 
-The `notify.email.password` and `notify.webhook.url` fields only accept references:
+The `notify.email.password`, `notify.webhook.url` and `watch.entra[].clientSecret` fields only accept references:
 
 | Reference | Reads |
 |---|---|

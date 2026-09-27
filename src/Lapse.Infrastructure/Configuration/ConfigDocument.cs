@@ -43,6 +43,21 @@ internal sealed class WatchDocument
 
     [JsonConverter(typeof(TargetListConverter))]
     public IReadOnlyList<TargetDocument>? Manual { get; init; }
+
+    public IReadOnlyList<EntraDocument>? Entra { get; init; }
+}
+
+internal sealed class EntraDocument
+{
+    public string? TenantId { get; init; }
+
+    public string? ClientId { get; init; }
+
+    public string? ClientSecret { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? Owner { get; init; }
 }
 
 internal sealed class TargetDocument

@@ -52,9 +52,11 @@ internal sealed class TempDirectory : IDisposable
     public void Dispose() => Directory.Delete(Path, recursive: true);
 }
 
+internal sealed record RecordedRequest(HttpMethod Method, Uri Uri, string? Body, string? Authorization);
+
 internal sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
 {
-    public List<(Uri Uri, string? Body)> Requests { get; } = [];
+    public List<RecordedRequest> Requests { get; } = [];
 
     public static StubHttpHandler Responding(HttpStatusCode status, string body = "") =>
         new(_ => new HttpResponseMessage(status) { Content = new StringContent(body) });
@@ -62,7 +64,7 @@ internal sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessa
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-        Requests.Add((request.RequestUri!, body));
+        Requests.Add(new RecordedRequest(request.Method, request.RequestUri!, body, request.Headers.Authorization?.ToString()));
         return respond(request);
     }
 }

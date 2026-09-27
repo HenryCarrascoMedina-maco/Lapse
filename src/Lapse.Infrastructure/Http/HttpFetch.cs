@@ -11,15 +11,23 @@ internal static class HttpFetch
     public static Task<Result<string>> GetStringAsync(HttpClient http, Uri uri, CancellationToken cancellationToken) =>
         GetStringAsync(http, uri, describeFailure: null, cancellationToken);
 
-    public static async Task<Result<string>> GetStringAsync(
+    public static Task<Result<string>> GetStringAsync(
         HttpClient http,
         Uri uri,
+        Func<HttpStatusCode, string?>? describeFailure,
+        CancellationToken cancellationToken) =>
+        SendAsync(http, () => new HttpRequestMessage(HttpMethod.Get, uri), describeFailure, cancellationToken);
+
+    public static async Task<Result<string>> SendAsync(
+        HttpClient http,
+        Func<HttpRequestMessage> createRequest,
         Func<HttpStatusCode, string?>? describeFailure,
         CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
         {
-            var (result, transient) = await TryGetAsync(http, uri, describeFailure, cancellationToken);
+            using var request = createRequest();
+            var (result, transient) = await TrySendAsync(http, request, describeFailure, cancellationToken);
             if (result.IsSuccess || !transient || attempt == MaxAttempts)
             {
                 return result;
@@ -29,15 +37,16 @@ internal static class HttpFetch
         }
     }
 
-    private static async Task<(Result<string> Result, bool Transient)> TryGetAsync(
+    private static async Task<(Result<string> Result, bool Transient)> TrySendAsync(
         HttpClient http,
-        Uri uri,
+        HttpRequestMessage request,
         Func<HttpStatusCode, string?>? describeFailure,
         CancellationToken cancellationToken)
     {
+        var host = request.RequestUri!.Host;
         try
         {
-            using var response = await http.GetAsync(uri, cancellationToken);
+            using var response = await http.SendAsync(request, cancellationToken);
             if (response.IsSuccessStatusCode)
             {
                 return (Result.Success(await response.Content.ReadAsStringAsync(cancellationToken)), false);
@@ -53,11 +62,11 @@ internal static class HttpFetch
         }
         catch (HttpRequestException)
         {
-            return (Result.Failure<string>($"could not connect to {uri.Host}"), true);
+            return (Result.Failure<string>($"could not connect to {host}"), true);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return (Result.Failure<string>($"{uri.Host} did not answer in time"), true);
+            return (Result.Failure<string>($"{host} did not answer in time"), true);
         }
     }
 }

@@ -15,6 +15,12 @@ public sealed class WatchPlan(
 
     public AlertPolicy Policy { get; } = policy;
 
+    public string OwnerFor(WatchTarget target, Observation observation) =>
+        observation.Contacts?
+            .Select(contact => Owners.Values.FirstOrDefault(owner => string.Equals(owner.Email, contact, StringComparison.OrdinalIgnoreCase)))
+            .FirstOrDefault(owner => owner is not null)?.Name
+        ?? target.Owner;
+
     public IReadOnlyList<Owner> RecipientsFor(string ownerName, bool includeBackup)
     {
         var owner = Owners[ownerName];

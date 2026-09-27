@@ -4,6 +4,7 @@ using Lapse.Core;
 using Lapse.Core.Alerts;
 using Lapse.Core.Items;
 using Lapse.Infrastructure.Certificates;
+using Lapse.Infrastructure.Entra;
 using Lapse.Infrastructure.Sources;
 
 namespace Lapse.Infrastructure.Configuration;
@@ -15,6 +16,7 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
     private const int DefaultSmtpPort = 587;
 
     private readonly List<string> errors = [];
+    private readonly List<EntraTenant> entraTenants = [];
 
     public Result<LapseConfiguration> Validate()
     {
@@ -26,7 +28,7 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
 
         return errors.Count > 0
             ? Result.Failure<LapseConfiguration>("The configuration has errors:" + string.Concat(errors.Select(error => $"{Environment.NewLine}  - {error}")))
-            : Result.Success(new LapseConfiguration(new WatchPlan(targets, owners, policy!), email, webhook, baseDirectory));
+            : Result.Success(new LapseConfiguration(new WatchPlan(targets, owners, policy!), email, webhook, entraTenants, baseDirectory));
     }
 
     private Dictionary<string, Owner> ReadOwners()
@@ -79,28 +81,30 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
         var seen = new HashSet<ItemKey>();
         var watch = document.Watch;
 
-        AddTargets("hosts", watch?.Hosts, HostTarget);
-        AddTargets("domains", watch?.Domains, DomainTarget);
-        AddTargets("files", watch?.Files, FileTarget);
-        AddTargets("manual", watch?.Manual, ManualTarget);
+        AddTargets("hosts", watch?.Hosts, entry => entry.Owner, HostTarget);
+        AddTargets("domains", watch?.Domains, entry => entry.Owner, DomainTarget);
+        AddTargets("files", watch?.Files, entry => entry.Owner, FileTarget);
+        AddTargets("manual", watch?.Manual, entry => entry.Owner, ManualTarget);
+        AddTargets("entra", watch?.Entra, entry => entry.Owner, EntraTarget);
 
         if (targets.Count == 0 && errors.Count == 0)
         {
-            errors.Add("watch: nothing to watch; add at least one host, domain, file or manual item");
+            errors.Add("watch: nothing to watch; add at least one host, domain, file, manual item or Entra tenant");
         }
 
         return targets;
 
-        void AddTargets(
+        void AddTargets<TEntry>(
             string section,
-            IReadOnlyList<TargetDocument>? entries,
-            Func<TargetDocument, Result<TargetSpec>> describe)
+            IReadOnlyList<TEntry>? entries,
+            Func<TEntry, string?> ownerOf,
+            Func<TEntry, Result<TargetSpec>> describe)
         {
             foreach (var (entry, index) in (entries ?? []).Select((entry, index) => (entry, index)))
             {
                 var location = string.Create(CultureInfo.InvariantCulture, $"watch.{section}[{index}]");
                 var description = describe(entry);
-                var owner = entry.Owner ?? document.Defaults?.Owner;
+                var owner = ownerOf(entry) ?? document.Defaults?.Owner;
 
                 if (!description.IsSuccess)
                 {
@@ -162,6 +166,24 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
             : Result.Failure<TargetSpec>("\"expiresAt\" must be a date, for example \"2026-12-24\"");
     }
 
+    private Result<TargetSpec> EntraTarget(EntraDocument entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.TenantId) || string.IsNullOrWhiteSpace(entry.ClientId))
+        {
+            return Result.Failure<TargetSpec>("\"tenantId\" and \"clientId\" are required");
+        }
+
+        var secret = ResolveSecret(entry.ClientSecret, "LAPSE_ENTRA_SECRET");
+        if (!secret.IsSuccess)
+        {
+            return Result.Failure<TargetSpec>($"clientSecret: {secret.Error}");
+        }
+
+        var tenantId = entry.TenantId.Trim().ToLowerInvariant();
+        entraTenants.Add(new EntraTenant(tenantId, entry.ClientId.Trim(), secret.Value));
+        return Result.Success(new TargetSpec(new ItemKey(ItemKind.Entra, tenantId), DisplayName: entry.Name));
+    }
+
     private EmailSettings? ReadEmail()
     {
         if (document.Notify?.Email is not { } email)
@@ -207,19 +229,7 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
 
     private Secret? ReadSecret(string location, string? reference, string suggestedVariable)
     {
-        if (string.IsNullOrWhiteSpace(reference))
-        {
-            errors.Add($"{location}: is required; use ${{env:{suggestedVariable}}}");
-            return null;
-        }
-
-        if (!SecretResolver.IsReference(reference))
-        {
-            errors.Add($"{location}: do not write secrets in the file; use a reference such as ${{env:{suggestedVariable}}} or ${{file:path}}");
-            return null;
-        }
-
-        var secret = SecretResolver.Resolve(reference, baseDirectory, readEnvironment);
+        var secret = ResolveSecret(reference, suggestedVariable);
         if (!secret.IsSuccess)
         {
             errors.Add($"{location}: {secret.Error}");
@@ -227,6 +237,18 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
         }
 
         return secret.Value;
+    }
+
+    private Result<Secret> ResolveSecret(string? reference, string suggestedVariable)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return Result.Failure<Secret>($"is required; use ${{env:{suggestedVariable}}}");
+        }
+
+        return SecretResolver.IsReference(reference)
+            ? SecretResolver.Resolve(reference, baseDirectory, readEnvironment)
+            : Result.Failure<Secret>($"do not write secrets in the file; use a reference such as ${{env:{suggestedVariable}}} or ${{file:path}}");
     }
 
     private static bool IsAllowedWebhook(string url) =>

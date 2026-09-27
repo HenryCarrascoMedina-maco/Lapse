@@ -22,7 +22,12 @@ public sealed record Item(
     DateTimeOffset LastScannedAt,
     string? LastError);
 
-public sealed record Observation(ItemKey Key, string Name, DateTimeOffset ExpiresAt, string? Fingerprint);
+public sealed record Observation(
+    ItemKey Key,
+    string Name,
+    DateTimeOffset ExpiresAt,
+    string? Fingerprint,
+    IReadOnlyList<string>? Contacts = null);
 
 public sealed record WatchTarget(ItemKey Key, string Owner, DateTimeOffset? DeclaredExpiresAt = null, string? DisplayName = null)
 {

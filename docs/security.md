@@ -40,15 +40,17 @@ Lapse only connects to these destinations:
 | `data.iana.org` | When domains are configured, at most once every 7 days | Nothing; it downloads the RDAP server directory and caches it in `rdap-bootstrap.json`. |
 | The RDAP server of each extension | When domains are configured | The domain name. |
 | `crt.sh` | Only with `lapse discover` | The queried domain. |
+| `login.microsoftonline.com` | When Entra tenants are configured | The client ID and client secret, to obtain an access token. |
+| `graph.microsoft.com` | When Entra tenants are configured | The access token. Lapse refuses pagination links to any other host. |
 | Your SMTP server or webhook | When sending alerts | The alert content. |
 
 Querying RDAP or crt.sh tells those services which domains you care about. The data is public, but if that is a concern, do not declare domains and do not use `discover`.
 
 Lapse does not sweep networks or scan ports: it only contacts the targets you declare, with a 10-second timeout and at most 8 concurrent connections.
 
-## Alert credentials
+## Credentials
 
-Sending alerts may require the SMTP password or a webhook URL carrying a token. They are the only credentials Lapse handles:
+Lapse handles three kinds of credentials: the SMTP password, a webhook URL carrying a token, and the client secret of an Entra application registration. The Entra credential only needs the read-only `Application.Read.All` permission; Microsoft Graph returns credential expiry dates without their values, and Lapse ignores the `hint` field that holds the first characters of a secret. All of them are treated the same way:
 
 - **Never in the configuration file.** Those fields only accept a reference:
   - `${env:NAME}` reads an environment variable;

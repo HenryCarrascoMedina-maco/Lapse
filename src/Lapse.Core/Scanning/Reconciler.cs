@@ -23,7 +23,8 @@ public static class Reconciler
         IReadOnlyCollection<Item> existing,
         WatchTarget target,
         Result<IReadOnlyList<Observation>> result,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        Func<Observation, string>? ownerOf = null)
     {
         if (!result.IsSuccess)
         {
@@ -32,7 +33,8 @@ public static class Reconciler
         }
 
         var previous = existing.ToDictionary(item => item.Key);
-        return [.. result.Value.Select(observation => Observed(previous.GetValueOrDefault(observation.Key), target, observation, now))];
+        return [.. result.Value.Select(observation =>
+            Observed(previous.GetValueOrDefault(observation.Key), target, observation, ownerOf?.Invoke(observation) ?? target.Owner, now))];
     }
 
     private static Item Placeholder(WatchTarget target, DateTimeOffset now) =>
@@ -44,14 +46,14 @@ public static class Reconciler
         item.ExpiresAt,
         Observation: null);
 
-    private static Reconciliation Observed(Item? previous, WatchTarget target, Observation observation, DateTimeOffset now)
+    private static Reconciliation Observed(Item? previous, WatchTarget target, Observation observation, string owner, DateTimeOffset now)
     {
         var outcome = OutcomeOf(previous?.ExpiresAt, observation.ExpiresAt);
         var item = new Item(
             observation.Key,
             target.Key,
             observation.Name,
-            target.Owner,
+            owner,
             observation.ExpiresAt,
             outcome == ScanOutcome.Renewed ? ItemStatus.Renewed : ItemStatus.Active,
             now,

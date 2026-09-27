@@ -19,9 +19,9 @@ public class WebhookNotifierTests
         var result = await Notifier(handler).SendAsync(Alert(), CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Error);
-        var (uri, body) = Assert.Single(handler.Requests);
-        Assert.Equal(new Uri(Url), uri);
-        using var payload = JsonDocument.Parse(body!);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(new Uri(Url), request.Uri);
+        using var payload = JsonDocument.Parse(request.Body!);
         var root = payload.RootElement;
         Assert.Equal("threshold", root.GetProperty("event").GetString());
         Assert.Equal("[Lapse] api.example.com:443 expires in 5 days", root.GetProperty("text").GetString());

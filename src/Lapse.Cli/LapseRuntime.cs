@@ -4,6 +4,7 @@ using Lapse.Core;
 using Lapse.Core.Alerts;
 using Lapse.Core.Scanning;
 using Lapse.Infrastructure.Configuration;
+using Lapse.Infrastructure.Entra;
 using Lapse.Infrastructure.Http;
 using Lapse.Infrastructure.Notifications;
 using Lapse.Infrastructure.Rdap;
@@ -90,6 +91,7 @@ internal sealed class LapseRuntime : IAsyncDisposable
             new RdapSource(http, new RdapBootstrap(http, bootstrapCache, time)),
             new CertificateFileSource(),
             new ManualSource(),
+            new EntraSource(http, configuration.EntraTenants),
         ];
 
         var pipeline = new ScanPipeline(sources, Notifiers(configuration, http, time), store, time);
