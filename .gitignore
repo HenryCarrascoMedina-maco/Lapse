@@ -1,0 +1,11 @@
+bin/
+obj/
+artifacts/
+TestResults/
+.vs/
+.idea/
+*.user
+
+lapse.db
+lapse.db-*
+rdap-bootstrap.json

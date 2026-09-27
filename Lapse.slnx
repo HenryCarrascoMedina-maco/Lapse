@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Lapse.Cli/Lapse.Cli.csproj" />
+    <Project Path="src/Lapse.Core/Lapse.Core.csproj" />
+    <Project Path="src/Lapse.Infrastructure/Lapse.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Lapse.Architecture.Tests/Lapse.Architecture.Tests.csproj" />
+    <Project Path="tests/Lapse.Core.Tests/Lapse.Core.Tests.csproj" />
+    <Project Path="tests/Lapse.Infrastructure.Tests/Lapse.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>
