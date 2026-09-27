@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Lapse.Core\Lapse.Core.csproj" />
+    <ProjectReference Include="..\..\src\Lapse.Infrastructure\Lapse.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
