@@ -1,0 +1,19 @@
+{
+  "owners": {
+    "it": { "email": "it@example.com" },
+    "accounting": { "email": "accounting@example.com", "backup": "it" }
+  },
+  "defaults": {
+    "owner": "it",
+    "warnAtDays": [30, 14, 7, 1],
+    "criticalDays": 7
+  },
+  "watch": {
+    "hosts": ["example.com:443"],
+    "domains": ["example.com"],
+    "files": [],
+    "manual": [
+      { "name": "Antivirus license", "expiresAt": "2027-01-31" }
+    ]
+  }
+}
