@@ -1,0 +1,29 @@
+name: Bug
+description: Something does not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste passwords, tokens or a full webhook URL. For security problems, follow SECURITY.md instead of opening an issue.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `lapse --version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Windows, Linux, macOS, Docker]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did and what happened
+      description: Command run, output received and what you expected to see.
+    validations:
+      required: true

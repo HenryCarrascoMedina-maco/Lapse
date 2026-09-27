@@ -1,0 +1,25 @@
+name: New source
+description: Propose something that expires and that Lapse should watch.
+labels: [source]
+body:
+  - type: input
+    id: what
+    attributes:
+      label: What expires
+      description: For example, iOS provisioning profiles or Kubernetes cluster certificates.
+    validations:
+      required: true
+  - type: textarea
+    id: discovery
+    attributes:
+      label: How the date is read
+      description: API, file or protocol that exposes the expiry date.
+    validations:
+      required: true
+  - type: textarea
+    id: credentials
+    attributes:
+      label: Required credentials
+      description: The least privileges needed, or "none" if the date is public.
+    validations:
+      required: true

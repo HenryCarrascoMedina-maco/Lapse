@@ -1,0 +1,10 @@
+.git
+.github
+.vs
+**/bin
+**/obj
+artifacts
+tests
+docs
+*.md
+lapse.db*
