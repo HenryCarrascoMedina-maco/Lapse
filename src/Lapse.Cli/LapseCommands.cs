@@ -43,6 +43,7 @@ internal static class LapseCommands
         root.Subcommands.Add(CheckCommand.Create());
         root.Subcommands.Add(ListCommand.Create());
         root.Subcommands.Add(ExportCommand.Create());
+        root.Subcommands.Add(ReportCommand.Create());
         root.Subcommands.Add(DiscoverCommand.Create());
         root.Subcommands.Add(WatchCommand.Create());
         return root;

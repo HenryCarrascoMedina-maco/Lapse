@@ -6,6 +6,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Lapse.Architecture.Tests/Lapse.Architecture.Tests.csproj" />
+    <Project Path="tests/Lapse.Cli.Tests/Lapse.Cli.Tests.csproj" />
     <Project Path="tests/Lapse.Core.Tests/Lapse.Core.Tests.csproj" />
     <Project Path="tests/Lapse.Infrastructure.Tests/Lapse.Infrastructure.Tests.csproj" />
   </Folder>

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lapse · nothing should expire by surprise</title>
+<meta name="description" content="Open-source, self-hosted tool that discovers what expires in your organization — TLS certificates, domains, Entra ID secrets, SAML certificates — assigns an owner, alerts in time and verifies the renewal.">
+<meta property="og:title" content="Lapse">
+<meta property="og:description" content="Nothing in your organization should expire by surprise. Open source, self-hosted, stores no secrets.">
+<style>
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eef0f4; --ink: #141b24; --muted: #566172; --line: #dce0e7;
+  --accent: #2b45c9; --accent-ink: #ffffff; --accent-soft: #e6eafb;
+  --critical: #b42318; --warning: #9a5800; --ok: #1e7b4b;
+  --code-bg: #101722; --code-ink: #d9e1ec; --code-muted: #7f8da3;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1319; --surface: #151c25; --surface-2: #1c2530; --ink: #e6ebf2; --muted: #9aa5b5; --line: #2a3441;
+    --accent: #93a5ff; --accent-ink: #0e1319; --accent-soft: #1d2647;
+    --critical: #ff8c7c; --warning: #f0b45c; --ok: #72d49d;
+    --code-bg: #090d13;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 var(--font); }
+a { color: var(--accent); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; }
+nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 21px; color: var(--ink); text-decoration: none; }
+nav ul { list-style: none; display: flex; gap: 20px; margin: 0; padding: 0; font-size: 15px; }
+nav ul a { color: var(--muted); text-decoration: none; }
+nav ul a:hover { color: var(--ink); }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; padding-block: 48px 64px; }
+@media (max-width: 880px) { .hero { grid-template-columns: minmax(0, 1fr); } nav ul li.optional { display: none; } }
+.eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+h1 { font-size: clamp(36px, 5.2vw, 56px); line-height: 1.08; letter-spacing: -0.025em; margin: 0 0 18px; text-wrap: balance; }
+h2 { font-size: 30px; line-height: 1.2; letter-spacing: -0.015em; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-size: 18px; margin: 0 0 6px; }
+.lead { font-size: 19px; color: var(--muted); margin: 0 0 28px; max-width: 34em; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 10px; font-weight: 650; font-size: 16px; text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
+.button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+pre { margin: 0; background: var(--code-bg); color: var(--code-ink); font: 13.5px/1.65 var(--mono); padding: 18px 20px; border-radius: 12px; overflow-x: auto; }
+pre .m { color: var(--code-muted); } pre .r { color: #ff9a8b; } pre .y { color: #f2c46b; } pre .g { color: #8fdca9; } pre .p { color: #9db0ff; }
+section { padding-block: 56px; border-top: 1px solid var(--line); }
+.intro { max-width: 44em; color: var(--muted); margin: 0 0 28px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.card .tag { font-family: var(--mono); font-size: 12px; color: var(--accent); margin-bottom: 6px; display: block; }
+.steps { counter-reset: step; }
+.steps .card::before { counter-increment: step; content: counter(step, decimal-leading-zero); display: block; font-family: var(--mono); font-size: 13px; color: var(--accent); margin-bottom: 6px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.fact b { display: block; font-size: 34px; letter-spacing: -0.02em; line-height: 1.1; }
+.fact span { color: var(--muted); font-size: 15px; }
+ul.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; max-width: 46em; }
+ul.checks li { padding-left: 28px; position: relative; }
+ul.checks li::before { content: ""; position: absolute; left: 0; top: 0.45em; width: 14px; height: 8px; border-left: 2.5px solid var(--ok); border-bottom: 2.5px solid var(--ok); transform: rotate(-45deg); }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 880px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.beta { font-family: var(--mono); font-size: 11px; background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 1px 6px; vertical-align: 2px; }
+footer { border-top: 1px solid var(--line); padding-block: 32px 48px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#"><svg width="22" height="22" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 4.5V9l3 2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>lapse</a>
+    <ul>
+      <li><a href="demo.html">Live demo</a></li>
+      <li class="optional"><a href="#watches">What it watches</a></li>
+      <li class="optional"><a href="#security">Security</a></li>
+      <li><a href="https://github.com/HenryCarrascoMedina-maco/Lapse">GitHub</a></li>
+    </ul>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Open source · self-hosted · Apache-2.0</p>
+      <h1>Nothing in your organization should expire by surprise.</h1>
+      <p class="lead">Lapse finds what expires — TLS certificates, domains, Entra ID secrets, SAML certificates — gives each one an owner, warns in time and only closes the alert once it sees the renewal.</p>
+      <div class="actions">
+        <a class="button primary" href="demo.html">Try the live demo</a>
+        <a class="button" href="https://github.com/HenryCarrascoMedina-maco/Lapse/releases/latest">Download</a>
+      </div>
+    </div>
+    <pre><span class="p">$</span> lapse scan
+Scanning 8 items…
+
+ STATUS    ITEM                       DAYS  OWNER
+ <span class="r">EXPIRED</span>   intranet.acme.local:443      -2  it
+ <span class="r">CRITICAL</span>  api.acme.com:443              6  platform
+ <span class="r">CRITICAL</span>  ERP Sync · secret prod        6  ana
+ <span class="y">WARNING</span>   acme.pe                      27  finance
+ <span class="g">RENEWED</span>   acme.com:443                174  it  <span class="m">was: 2026-10-02</span>
+
+Alerts sent: 3 · already sent before: 1</pre>
+  </header>
+
+  <section>
+    <p class="eyebrow">Why now</p>
+    <h2>Certificates are getting shorter. Outages are not.</h2>
+    <p class="intro">Public TLS certificates are limited to 200 days since March 2026, 100 days from 2027 and 47 days by 2029. Every renewal is a chance for something to break — and the reminder often lands in the inbox of someone who left the company.</p>
+    <div class="facts">
+      <div class="card fact"><b>2018</b><span>An expired certificate cut mobile data for millions of O2 customers.</span></div>
+      <div class="card fact"><b>2020</b><span>Microsoft Teams went down because an authentication certificate expired.</span></div>
+      <div class="card fact"><b>2023</b><span>Part of Starlink's ground network failed over an expired certificate.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">How it works</p>
+    <h2>Four steps, one loop</h2>
+    <div class="grid steps">
+      <div class="card"><h3>Discover</h3><p>Scans hosts, domains, files and cloud tenants, and searches Certificate Transparency for certificates nobody registered.</p></div>
+      <div class="card"><h3>Assign</h3><p>Every item has an owner and a backup. Entra ID credentials go to the application's owner automatically.</p></div>
+      <div class="card"><h3>Alert</h3><p>At 30, 14, 7 and 1 days by email, webhook, Slack, Discord, Teams or Telegram. Never twice for the same thing.</p></div>
+      <div class="card"><h3>Verify</h3><p>An alert only closes when a scan sees the new expiry date — not when someone says "done".</p></div>
+    </div>
+  </section>
+
+  <section id="watches">
+    <p class="eyebrow">What it watches</p>
+    <h2>Everything with an expiry date</h2>
+    <div class="grid">
+      <div class="card"><span class="tag">hosts</span><h3>TLS certificates</h3><p>Any host:port speaking TLS, plus STARTTLS for SMTP, IMAP, POP3 and PostgreSQL.</p></div>
+      <div class="card"><span class="tag">domains</span><h3>Domain registrations</h3><p>Expiration dates straight from the registry through RDAP.</p></div>
+      <div class="card"><span class="tag">entra</span><h3>Entra ID secrets <span class="beta">beta</span></h3><p>Client secrets and certificates of every app registration, with a read-only permission.</p></div>
+      <div class="card"><span class="tag">saml</span><h3>SAML certificates</h3><p>Signing and encryption certificates from any identity provider's metadata.</p></div>
+      <div class="card"><span class="tag">files</span><h3>Certificate files</h3><p>.cer, .crt and .pem files, such as the certificate used for electronic invoicing.</p></div>
+      <div class="card"><span class="tag">manual</span><h3>Everything else</h3><p>Licenses, contracts and policies, with the same owners and alerts.</p></div>
+    </div>
+  </section>
+
+  <section id="security">
+    <div class="two">
+      <div>
+        <p class="eyebrow">Security</p>
+        <h2>It watches dates, not secrets</h2>
+        <p class="intro">Lapse runs on your machine and keeps a local SQLite file with names, dates and fingerprints. There is no Lapse server, account or telemetry.</p>
+      </div>
+      <ul class="checks">
+        <li>Private keys (.pfx, .p12, .key) are rejected and never stored.</li>
+        <li>Credentials are only accepted as <code>${env:…}</code> or <code>${file:…}</code> references and never appear in the output.</li>
+        <li>Entra ID only needs <code>Application.Read.All</code>; Graph returns expiry dates, never secret values.</li>
+        <li>Every outbound connection is documented. Lapse opens no ports.</li>
+        <li>A single native executable, two dependencies, an SBOM and checksums with every release.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Get started</p>
+    <h2>Running in five minutes</h2>
+    <div class="two">
+      <pre><span class="m"># Download the executable for your system from Releases, then:</span>
+<span class="p">$</span> lapse init
+<span class="p">$</span> lapse scan
+<span class="p">$</span> lapse discover your-domain.com
+<span class="p">$</span> lapse report</pre>
+      <pre><span class="m"># Or with Docker</span>
+<span class="p">$</span> docker run --rm --read-only -v "$PWD:/data" \
+    ghcr.io/henrycarrascomedina-maco/lapse scan
+
+<span class="m"># Fail a pipeline if anything expires within 14 days</span>
+<span class="p">$</span> lapse check --min-days 14</pre>
+    </div>
+  </section>
+
+  <footer>
+    <span>Lapse is open source under the Apache-2.0 license.</span>
+    <span><a href="https://github.com/HenryCarrascoMedina-maco/Lapse">Source</a> · <a href="https://github.com/HenryCarrascoMedina-maco/Lapse/blob/main/docs/configuration.md">Configuration</a> · <a href="https://github.com/HenryCarrascoMedina-maco/Lapse/blob/main/CONTRIBUTING.md">Contributing</a></span>
+  </footer>
+</div>
+</body>
+</html>

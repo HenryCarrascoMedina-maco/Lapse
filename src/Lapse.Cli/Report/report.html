@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<title>Lapse report</title>
+<style>
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eef0f4; --ink: #141b24; --muted: #5a6474; --line: #dce0e7;
+  --accent: #2b45c9; --accent-soft: #e6eafb;
+  --expired: #b42318; --expired-soft: #fde8e6; --warning: #9a5800; --warning-soft: #fdf0d9;
+  --ok: #1e7b4b; --ok-soft: #e3f4ea; --error: #6b4fbb; --error-soft: #efeafd;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1319; --surface: #151c25; --surface-2: #1c2530; --ink: #e6ebf2; --muted: #9aa5b5; --line: #2a3441;
+    --accent: #93a5ff; --accent-soft: #1d2647;
+    --expired: #ff8c7c; --expired-soft: #3a1b17; --warning: #f0b45c; --warning-soft: #342711;
+    --ok: #72d49d; --ok-soft: #14301f; --error: #b9a5ff; --error-soft: #2a2145;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); }
+main { max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+h1 svg { flex: none; }
+.meta { color: var(--muted); font-size: 13px; }
+.summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.chip { all: unset; cursor: pointer; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.chip b { font-size: 24px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.chip span { font-size: 12.5px; color: var(--muted); }
+.chip[data-status="expired"] b, .chip[data-status="critical"] b { color: var(--expired); }
+.chip[data-status="warning"] b { color: var(--warning); }
+.chip[data-status="error"] b { color: var(--error); }
+.chip[data-status="ok"] b, .chip[data-status="renewed"] b { color: var(--ok); }
+.tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tools input { flex: 1 1 260px; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; }
+.tools input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tools .count { color: var(--muted); font-size: 13px; }
+.table { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+th { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+td.name { font-weight: 550; min-width: 220px; overflow-wrap: anywhere; }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.date { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+td.note { color: var(--muted); font-size: 13px; min-width: 160px; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pill.expired, .pill.critical { background: var(--expired-soft); color: var(--expired); }
+.pill.warning { background: var(--warning-soft); color: var(--warning); }
+.pill.error { background: var(--error-soft); color: var(--error); }
+.pill.ok, .pill.renewed { background: var(--ok-soft); color: var(--ok); }
+.pill.unknown { background: var(--surface-2); color: var(--muted); }
+.kind { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+footer { color: var(--muted); font-size: 12.5px; }
+footer a { color: var(--accent); }
+@media (max-width: 640px) { td.note, th.note { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><svg width="24" height="24" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 4.5V9l3 2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>Lapse report</h1>
+    <div class="meta" id="meta"></div>
+  </header>
+  <section class="summary" id="summary" aria-label="Filter by status"></section>
+  <div class="tools">
+    <input id="search" type="search" placeholder="Search item, owner or kind…" aria-label="Search">
+    <span class="count" id="count"></span>
+  </div>
+  <div class="table">
+    <table>
+      <thead><tr><th>Status</th><th>Item</th><th>Kind</th><th>Owner</th><th>Expires</th><th class="num">Days</th><th class="note">Note</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No items match.</div>
+  </div>
+  <footer>Generated by <a href="https://github.com/HenryCarrascoMedina-maco/Lapse">Lapse</a>. This file works offline and loads nothing from the internet.</footer>
+</main>
+<script id="lapse-data" type="application/json">__LAPSE_DATA__</script>
+<script>
+(() => {
+  const report = JSON.parse(document.getElementById("lapse-data").textContent);
+  const statuses = [
+    ["expired", "Expired"], ["critical", "Critical"], ["warning", "Warning"],
+    ["error", "Error"], ["renewed", "Renewed"], ["ok", "OK"], ["unknown", "Unknown"]
+  ];
+  const labels = Object.fromEntries(statuses);
+  const rank = Object.fromEntries(statuses.map(([code], index) => [code, index]));
+  const items = [...report.items].sort((a, b) =>
+    (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || (a.days ?? 1e9) - (b.days ?? 1e9) || a.name.localeCompare(b.name));
+
+  const element = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    if (className) node.className = className;
+    return node;
+  };
+
+  document.getElementById("meta").textContent =
+    `${items.length} item${items.length === 1 ? "" : "s"} · generated ${report.generatedAt}`;
+
+  let filter = null;
+  const summary = document.getElementById("summary");
+  for (const [code, label] of statuses) {
+    const total = items.filter(item => item.status === code).length;
+    if (total === 0) continue;
+    const chip = element("button", undefined, "chip");
+    chip.type = "button";
+    chip.dataset.status = code;
+    chip.setAttribute("aria-pressed", "false");
+    chip.append(element("b", total), element("span", label));
+    chip.addEventListener("click", () => {
+      filter = filter === code ? null : code;
+      for (const other of summary.children) other.setAttribute("aria-pressed", String(other.dataset.status === filter));
+      render();
+    });
+    summary.append(chip);
+  }
+
+  const search = document.getElementById("search");
+  search.addEventListener("input", render);
+
+  function render() {
+    const query = search.value.trim().toLowerCase();
+    const visible = items.filter(item =>
+      (!filter || item.status === filter) &&
+      (!query || [item.name, item.owner, item.kind].some(value => value.toLowerCase().includes(query))));
+
+    const body = document.getElementById("rows");
+    body.replaceChildren(...visible.map(item => {
+      const row = document.createElement("tr");
+      const status = element("td");
+      status.append(element("span", labels[item.status] ?? item.status, `pill ${item.status}`));
+      row.append(
+        status,
+        element("td", item.name, "name"),
+        element("td", item.kind, "kind"),
+        element("td", item.owner),
+        element("td", item.expires ?? "—", "date"),
+        element("td", item.days ?? "—", "num"),
+        element("td", item.note ?? "", "note"));
+      return row;
+    }));
+
+    document.getElementById("empty").hidden = visible.length > 0;
+    document.getElementById("count").textContent = visible.length === items.length ? "" : `${visible.length} of ${items.length} shown`;
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

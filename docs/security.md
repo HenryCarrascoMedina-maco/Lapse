@@ -61,6 +61,10 @@ Lapse handles four kinds of credentials: the SMTP password, webhook and Teams UR
 - **Never in the output.** They are held in a `Secret` type that prints as `***`. Webhook errors never include its URL.
 - **Webhooks over HTTPS only**, except `http://localhost` for local testing.
 
+## Reports
+
+`lapse report` writes a single HTML file. It declares a Content Security Policy that blocks every network request, uses no external fonts, scripts or images, and inserts item names as text so that a crafted certificate or application name cannot inject code. Treat the file like the database: it lists your inventory.
+
 ## Supply chain
 
 - Minimal dependencies: `System.CommandLine` and `Microsoft.Data.Sqlite`. Everything else comes with .NET.

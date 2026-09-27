@@ -13,6 +13,10 @@
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Lapse.Cli.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <EmbeddedResource Include="..\..\lapse.example.json" LogicalName="Lapse.lapse.example.json" />
+    <EmbeddedResource Include="Report\report.html" LogicalName="Lapse.report.html" />
   </ItemGroup>
 </Project>
