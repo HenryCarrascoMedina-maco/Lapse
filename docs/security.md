@@ -40,6 +40,7 @@ Lapse only connects to these destinations:
 | `data.iana.org` | When domains are configured, at most once every 7 days | Nothing; it downloads the RDAP server directory and caches it in `rdap-bootstrap.json`. |
 | The RDAP server of each extension | When domains are configured | The domain name. |
 | `crt.sh` | Only with `lapse discover` | The queried domain. |
+| The URLs in `watch.saml` | `scan`, `check`, `watch` | Nothing; Lapse downloads the public metadata. |
 | `login.microsoftonline.com` | When Entra tenants are configured | The client ID and client secret, to obtain an access token. |
 | `graph.microsoft.com` | When Entra tenants are configured | The access token. Lapse refuses pagination links to any other host. |
 | Your SMTP server or webhook | When sending alerts | The alert content. |

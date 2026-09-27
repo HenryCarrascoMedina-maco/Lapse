@@ -44,6 +44,9 @@ internal sealed class WatchDocument
     [JsonConverter(typeof(TargetListConverter))]
     public IReadOnlyList<TargetDocument>? Manual { get; init; }
 
+    [JsonConverter(typeof(TargetListConverter))]
+    public IReadOnlyList<TargetDocument>? Saml { get; init; }
+
     public IReadOnlyList<EntraDocument>? Entra { get; init; }
 }
 

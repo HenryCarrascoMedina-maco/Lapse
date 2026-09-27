@@ -91,6 +91,7 @@ internal sealed class LapseRuntime : IAsyncDisposable
             new RdapSource(http, new RdapBootstrap(http, bootstrapCache, time)),
             new CertificateFileSource(),
             new ManualSource(),
+            new SamlSource(http),
             new EntraSource(http, configuration.EntraTenants),
         ];
 

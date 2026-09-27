@@ -85,11 +85,12 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
         AddTargets("domains", watch?.Domains, entry => entry.Owner, DomainTarget);
         AddTargets("files", watch?.Files, entry => entry.Owner, FileTarget);
         AddTargets("manual", watch?.Manual, entry => entry.Owner, ManualTarget);
+        AddTargets("saml", watch?.Saml, entry => entry.Owner, SamlTarget);
         AddTargets("entra", watch?.Entra, entry => entry.Owner, EntraTarget);
 
         if (targets.Count == 0 && errors.Count == 0)
         {
-            errors.Add("watch: nothing to watch; add at least one host, domain, file, manual item or Entra tenant");
+            errors.Add("watch: nothing to watch; add at least one host, domain, file, manual item, SAML metadata URL or Entra tenant");
         }
 
         return targets;
@@ -165,6 +166,11 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
             ? Result.Success<TargetSpec>(new TargetSpec(new ItemKey(ItemKind.Manual, entry.Name.Trim()), expiresAt.ToUniversalTime()))
             : Result.Failure<TargetSpec>("\"expiresAt\" must be a date, for example \"2026-12-24\"");
     }
+
+    private static Result<TargetSpec> SamlTarget(TargetDocument entry) =>
+        Uri.TryCreate(entry.Target, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps
+            ? Result.Success(new TargetSpec(new ItemKey(ItemKind.Saml, url.AbsoluteUri)))
+            : Result.Failure<TargetSpec>("expected the https URL of the SAML metadata");
 
     private Result<TargetSpec> EntraTarget(EntraDocument entry)
     {

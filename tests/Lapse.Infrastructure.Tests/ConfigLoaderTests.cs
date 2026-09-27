@@ -123,6 +123,15 @@ public sealed class ConfigLoaderTests : IDisposable
     }
 
     [Fact]
+    public async Task Saml_metadata_must_be_served_over_https()
+    {
+        var result = await LoadAsync(Minimal(watch: """{ "saml": [ "https://idp.example.com/metadata", "http://idp.example.com/metadata" ] }"""));
+
+        Assert.Contains("watch.saml[1]: expected the https URL of the SAML metadata", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("watch.saml[0]", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Rejects_an_entra_secret_written_in_plain_text()
     {
         var result = await LoadAsync(Minimal(watch: """{ "entra": [ { "tenantId": "t", "clientId": "c", "clientSecret": "plain-entra-secret" } ] }"""));

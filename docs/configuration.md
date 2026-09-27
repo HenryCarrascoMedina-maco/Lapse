@@ -98,6 +98,16 @@ What cannot be discovered automatically: licenses, contracts, insurance policies
 | `expiresAt` | yes | Date (`2026-12-24`) or ISO 8601 date and time. Without a time zone, UTC is assumed. |
 | `owner` | no | Owner. |
 
+### `saml`
+
+Signing and encryption certificates published in the SAML metadata of an identity provider or service provider. When the identity provider's signing certificate expires, nobody can sign in.
+
+```json
+"saml": [ "https://idp.acme.com/metadata.xml", { "target": "https://login.partner.com/saml/metadata", "owner": "it" } ]
+```
+
+The URL must use HTTPS. Every certificate in the metadata becomes an item, such as `idp.acme.com · signing certificate 1A2B3C4D`. Providers usually publish the next certificate before rotating, so both appear until the old one is removed. The XML is read with document type definitions disabled.
+
 ### `entra`
 
 Secrets and certificates of the application registrations in a Microsoft Entra ID tenant.
