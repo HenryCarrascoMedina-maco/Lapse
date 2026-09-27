@@ -55,7 +55,18 @@ TLS certificates, as `host:port`. Without a port, 443 is used.
 "hosts": [ "acme.com", "api.acme.com:8443", { "target": "ldap.acme.local:636", "owner": "it" } ]
 ```
 
-Works with any service that speaks TLS from the first byte: HTTPS, LDAPS (636), IMAPS (993), SMTPS (465). Lapse reads the certificate even if it is expired or untrusted. Services that negotiate TLS inside their own protocol (STARTTLS on SMTP 587, SQL Server, RDP) are not supported yet.
+This works with any service that speaks TLS from the first byte: HTTPS, LDAPS (636), IMAPS (993), SMTPS (465). Lapse reads the certificate even if it is expired or untrusted.
+
+Services that upgrade a plain connection to TLS are written with their protocol:
+
+| Target | Default port | Negotiation |
+|---|---|---|
+| `smtp://mail.acme.com` | 587 | `EHLO` and `STARTTLS` |
+| `imap://mail.acme.com` | 143 | `STARTTLS` |
+| `pop3://mail.acme.com` | 110 | `STLS` |
+| `postgres://db.acme.com` | 5432 | `SSLRequest` |
+
+Lapse stops right after the negotiation: it never authenticates or sends mail or queries. SQL Server and RDP are not supported yet.
 
 ### `domains`
 

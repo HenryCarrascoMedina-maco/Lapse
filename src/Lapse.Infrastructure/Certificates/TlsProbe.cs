@@ -32,7 +32,14 @@ internal static class TlsProbe
         {
             using var client = new TcpClient();
             await client.ConnectAsync(endpoint.Host, endpoint.Port, timeoutSource.Token);
-            await using var tls = new SslStream(client.GetStream(), leaveInnerStreamOpen: false);
+            var stream = client.GetStream();
+            var negotiated = await StartTls.NegotiateAsync(stream, endpoint.Protocol, timeoutSource.Token);
+            if (!negotiated.IsSuccess)
+            {
+                return Failure(negotiated.Error);
+            }
+
+            await using var tls = new SslStream(stream, leaveInnerStreamOpen: false);
             await tls.AuthenticateAsClientAsync(options, timeoutSource.Token);
         }
         catch (AuthenticationException) when (certificate is not null)

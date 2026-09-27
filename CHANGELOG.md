@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- STARTTLS targets: `smtp://`, `imap://`, `pop3://` and `postgres://`.
+
+### Changed
+
+- A source can produce several items per target. When a target cannot be read, its items are kept and marked as not verified instead of being removed.
+
+### Fixed
+
+- Watching a subdomain in `domains` explains that only registered domains have an expiration date.
+
 ## [0.1.0] - 2026-09-27
 
 First public release.

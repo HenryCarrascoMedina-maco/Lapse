@@ -139,6 +139,21 @@ public class ConfigValueTests
     }
 
     [Theory]
+    [InlineData("smtp://Mail.Example.com", "smtp://mail.example.com:587")]
+    [InlineData("imap://mail.example.com", "imap://mail.example.com:143")]
+    [InlineData("POP3://mail.example.com:1110", "pop3://mail.example.com:1110")]
+    [InlineData("postgres://db.example.com", "postgres://db.example.com:5432")]
+    public void Starttls_endpoints_use_the_protocol_default_port(string text, string expected)
+    {
+        Assert.True(Sources.HostEndpoint.TryParse(text, out var endpoint));
+        Assert.Equal(expected, endpoint.ToString());
+    }
+
+    [Fact]
+    public void Unknown_protocols_are_rejected() =>
+        Assert.False(Sources.HostEndpoint.TryParse("ftp://files.example.com", out _));
+
+    [Theory]
     [InlineData("")]
     [InlineData("host:0")]
     [InlineData("host:70000")]

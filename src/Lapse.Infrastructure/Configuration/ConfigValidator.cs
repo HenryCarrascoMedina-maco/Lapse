@@ -129,7 +129,7 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
     private static Result<TargetSpec> HostTarget(TargetDocument entry) =>
         HostEndpoint.TryParse(entry.Target, out var endpoint)
             ? Result.Success<TargetSpec>(new TargetSpec(new ItemKey(ItemKind.Tls, endpoint.ToString())))
-            : Result.Failure<TargetSpec>("expected host:port, for example \"acme.com:443\"");
+            : Result.Failure<TargetSpec>("expected host:port or smtp://, imap://, pop3:// or postgres:// followed by host[:port], for example \"acme.com:443\"");
 
     private static Result<TargetSpec> DomainTarget(TargetDocument entry) =>
         DomainName.Normalize(entry.Target).Map(domain => new TargetSpec(new ItemKey(ItemKind.Domain, domain)));
