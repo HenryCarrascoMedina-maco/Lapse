@@ -78,7 +78,7 @@ internal static class ScanCommand
 
         if (!runtime.Pipeline.HasNotifiers)
         {
-            Terminal.Line("No alert channels configured (notify.email or notify.webhook).");
+            Terminal.Line("No alert channels configured (notify.email, webhook, teams or telegram).");
             return;
         }
 

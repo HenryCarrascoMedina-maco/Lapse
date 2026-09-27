@@ -81,6 +81,17 @@ internal sealed class NotifyDocument
     public EmailDocument? Email { get; init; }
 
     public WebhookDocument? Webhook { get; init; }
+
+    public WebhookDocument? Teams { get; init; }
+
+    public TelegramDocument? Telegram { get; init; }
+}
+
+internal sealed class TelegramDocument
+{
+    public string? BotToken { get; init; }
+
+    public string? ChatId { get; init; }
 }
 
 internal sealed class EmailDocument

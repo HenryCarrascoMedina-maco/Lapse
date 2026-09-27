@@ -170,9 +170,24 @@ Lapse sends a `POST` with this JSON:
 
 `event` is `threshold`, `expired` or `renewed`. Slack and Mattermost display `text` and Discord displays `content`, so an incoming webhook from any of them works without changes.
 
+### `teams`
+
+| Field | Description |
+|---|---|
+| `url` | **Reference** to the URL of a Teams workflow "When a Teams webhook request is received". |
+
+Lapse posts an Adaptive Card with the alert subject and details.
+
+### `telegram`
+
+| Field | Description |
+|---|---|
+| `botToken` | **Reference** to the token given by @BotFather. |
+| `chatId` | Chat, group or channel that receives the alerts. |
+
 ## Secret references
 
-The `notify.email.password`, `notify.webhook.url` and `watch.entra[].clientSecret` fields only accept references:
+The `notify.email.password`, `notify.webhook.url`, `notify.teams.url`, `notify.telegram.botToken` and `watch.entra[].clientSecret` fields only accept references:
 
 | Reference | Reads |
 |---|---|

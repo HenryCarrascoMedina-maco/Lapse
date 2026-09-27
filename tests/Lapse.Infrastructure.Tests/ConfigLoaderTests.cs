@@ -123,6 +123,30 @@ public sealed class ConfigLoaderTests : IDisposable
     }
 
     [Fact]
+    public async Task Loads_teams_and_telegram_channels()
+    {
+        environment["TEAMS"] = "https://contoso.webhook.office.com/workflows/abc";
+        environment["TELEGRAM"] = "123456:token";
+
+        var result = await LoadAsync(Minimal(notify: """{ "teams": { "url": "${env:TEAMS}" }, "telegram": { "botToken": "${env:TELEGRAM}", "chatId": "-1001234" } }"""));
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal("https://contoso.webhook.office.com/workflows/abc", result.Value.TeamsUrl!.Reveal());
+        Assert.Equal("123456:token", result.Value.Telegram!.BotToken.Reveal());
+        Assert.Equal("-1001234", result.Value.Telegram.ChatId);
+    }
+
+    [Fact]
+    public async Task Rejects_a_telegram_token_written_in_plain_text()
+    {
+        var result = await LoadAsync(Minimal(notify: """{ "telegram": { "botToken": "123456:plain-token" } }"""));
+
+        Assert.Contains("notify.telegram.botToken: do not write secrets", result.Error, StringComparison.Ordinal);
+        Assert.Contains("notify.telegram.chatId: is required", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("plain-token", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Saml_metadata_must_be_served_over_https()
     {
         var result = await LoadAsync(Minimal(watch: """{ "saml": [ "https://idp.example.com/metadata", "http://idp.example.com/metadata" ] }"""));

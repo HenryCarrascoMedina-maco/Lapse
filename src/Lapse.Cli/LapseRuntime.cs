@@ -106,9 +106,19 @@ internal sealed class LapseRuntime : IAsyncDisposable
             yield return new EmailNotifier(email);
         }
 
-        if (configuration.WebhookUrl is { } url)
+        if (configuration.WebhookUrl is { } webhook)
         {
-            yield return new WebhookNotifier(http, url, time);
+            yield return HttpPostNotifier.Webhook(http, webhook, time);
+        }
+
+        if (configuration.TeamsUrl is { } teams)
+        {
+            yield return HttpPostNotifier.Teams(http, teams);
+        }
+
+        if (configuration.Telegram is { } telegram)
+        {
+            yield return HttpPostNotifier.Telegram(http, telegram.BotToken, telegram.ChatId);
         }
     }
 }

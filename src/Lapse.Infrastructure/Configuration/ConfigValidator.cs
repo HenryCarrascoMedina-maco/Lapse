@@ -24,11 +24,13 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
         var policy = ReadPolicy();
         var targets = ReadTargets(owners);
         var email = ReadEmail();
-        var webhook = ReadWebhook();
+        var webhook = ReadPostUrl("webhook", document.Notify?.Webhook, "LAPSE_WEBHOOK_URL");
+        var teams = ReadPostUrl("teams", document.Notify?.Teams, "LAPSE_TEAMS_URL");
+        var telegram = ReadTelegram();
 
         return errors.Count > 0
             ? Result.Failure<LapseConfiguration>("The configuration has errors:" + string.Concat(errors.Select(error => $"{Environment.NewLine}  - {error}")))
-            : Result.Success(new LapseConfiguration(new WatchPlan(targets, owners, policy!), email, webhook, entraTenants, baseDirectory));
+            : Result.Success(new LapseConfiguration(new WatchPlan(targets, owners, policy!), email, webhook, teams, telegram, entraTenants, baseDirectory));
     }
 
     private Dictionary<string, Owner> ReadOwners()
@@ -217,20 +219,37 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
         return new EmailSettings(email.Host ?? string.Empty, email.Port ?? DefaultSmtpPort, email.User, password, from ?? string.Empty, email.UseTls ?? true);
     }
 
-    private Secret? ReadWebhook()
+    private Secret? ReadPostUrl(string channel, WebhookDocument? settings, string suggestedVariable)
     {
-        if (document.Notify?.Webhook is not { } webhook)
+        if (settings is null)
         {
             return null;
         }
 
-        var url = ReadSecret("notify.webhook.url", webhook.Url, "LAPSE_WEBHOOK_URL");
+        var location = $"notify.{channel}.url";
+        var url = ReadSecret(location, settings.Url, suggestedVariable);
         if (url is not null && !IsAllowedWebhook(url.Reveal()))
         {
-            errors.Add("notify.webhook.url: the URL must use https (http is only allowed for localhost)");
+            errors.Add($"{location}: the URL must use https (http is only allowed for localhost)");
         }
 
         return url;
+    }
+
+    private TelegramSettings? ReadTelegram()
+    {
+        if (document.Notify?.Telegram is not { } telegram)
+        {
+            return null;
+        }
+
+        var token = ReadSecret("notify.telegram.botToken", telegram.BotToken, "LAPSE_TELEGRAM_TOKEN");
+        if (string.IsNullOrWhiteSpace(telegram.ChatId))
+        {
+            errors.Add("notify.telegram.chatId: is required");
+        }
+
+        return token is null ? null : new TelegramSettings(token, telegram.ChatId?.Trim() ?? string.Empty);
     }
 
     private Secret? ReadSecret(string location, string? reference, string suggestedVariable)
