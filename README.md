@@ -4,21 +4,21 @@
 
 Lapse watches TLS certificates, domains, Entra ID secrets, SAML certificates and certificate files, warns their owner before they expire and verifies that they were actually renewed. It runs on your own machine or server: it does not store passwords and does not send data to any Lapse service, because there is none.
 
-**[Try the live demo](https://henrycarrascomedina-maco.github.io/Lapse/demo.html)** Â· [Website](https://henrycarrascomedina-maco.github.io/Lapse/) Â· [Download](https://github.com/HenryCarrascoMedina-maco/Lapse/releases/latest)
+**[Try the live demo](https://henrycarrascomedina-maco.github.io/Lapse/demo.html)** · [Website](https://henrycarrascomedina-maco.github.io/Lapse/) · [Download](https://github.com/HenryCarrascoMedina-maco/Lapse/releases/latest)
 
 ```text
 $ lapse scan
-Scanning 8 itemsâ€¦
+Scanning 8 items…
 
  STATUS    ITEM                      KIND    EXPIRES     DAYS  OWNER
  EXPIRED   intranet.acme.local:443   tls     2026-09-25    -2  it
  CRITICAL  api.acme.com:443          tls     2026-10-03     6  it
  WARNING   acme.pe                   domain  2026-10-24    27  finance
  RENEWED   acme.com:443              tls     2027-03-20   174  it       was: 2026-10-02
- ERROR     vpn.acme.com:443          tls     â€”              â€”  it       no response within 10 s
+ ERROR     vpn.acme.com:443          tls     —              —  it       no response within 10 s
 
 3 unchanged items are hidden (use --all)
-Alerts sent: 3 Â· already sent before (skipped): 1
+Alerts sent: 3 · already sent before (skipped): 1
 ```
 
 ## Status
@@ -137,7 +137,7 @@ Full reference: [docs/configuration.md](docs/configuration.md).
 
 Common options: `-c, --config` (defaults to `lapse.json`) and `--db` (defaults to `lapse.db` next to the configuration).
 
-**Exit codes:** `0` success Â· `1` `check` found problems Â· `2` configuration error Â· `3` an alert could not be sent Â· `4` an external service did not answer.
+**Exit codes:** `0` success · `1` `check` found problems · `2` configuration error · `3` an alert could not be sent · `4` an external service did not answer.
 
 ### Scheduling
 
@@ -157,16 +157,16 @@ Common options: `-c, --config` (defaults to `lapse.json`) and `--db` (defaults t
 ## How it works
 
 ```text
-lapse.json â”€â”€â–º ConfigLoader â”€â”€â–º WatchPlan
-                                   â”‚
-             â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-             â–¼                     â–¼                     â–¼
-        TlsSource             RdapSource        CertificateFileSource â€¦   (ISource)
-             â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Observation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                                   â–¼
-                              Reconciler  â”€â”€â–º  SQLite (lapse.db)
-                                   â–¼
-                              AlertPlanner â”€â”€â–º  EmailNotifier Â· WebhookNotifier   (INotifier)
+lapse.json ──► ConfigLoader ──► WatchPlan
+                                   │
+             ┌─────────────────────┼─────────────────────┐
+             ▼                     ▼                     ▼
+        TlsSource             RdapSource        CertificateFileSource …   (ISource)
+             └────────── Observation ───────────┘
+                                   ▼
+                              Reconciler  ──►  SQLite (lapse.db)
+                                   ▼
+                              AlertPlanner ──►  EmailNotifier · WebhookNotifier   (INotifier)
 ```
 
 The code has three projects and one strict rule: **the core depends on nothing.**
