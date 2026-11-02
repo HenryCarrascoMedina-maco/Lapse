@@ -14,7 +14,7 @@ internal static class ItemRows
     private static readonly string[] Headers = ["STATUS", "ITEM", "KIND", "EXPIRES", "DAYS", "OWNER", ""];
 
     public static IEnumerable<ItemRow> ForItems(IEnumerable<Item> items, AlertPolicy policy, DateTimeOffset now) =>
-        items.Select(item => new ItemRow(item, policy.HealthOf(item, now), item.LastError));
+        items.Select(item => new ItemRow(item, policy.HealthOf(item, now), item.LastError ?? item.Problem));
 
     public static void WriteTable(IEnumerable<ItemRow> rows, DateTimeOffset now)
     {

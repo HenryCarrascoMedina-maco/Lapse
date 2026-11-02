@@ -6,30 +6,43 @@ namespace Lapse.Infrastructure.Notifications;
 
 internal static class AlertPayloads
 {
-    public static byte[] Webhook(PlannedAlert alert, DateTimeOffset now) => Json(writer =>
+    // Telegram rejects messages longer than 4096 characters.
+    private const int TelegramMaxLength = 4000;
+
+    public static byte[] Webhook(AlertDigest digest, DateTimeOffset now) => Json(writer =>
     {
-        var message = AlertMessage.For(alert);
+        var message = AlertMessage.For(digest);
         writer.WriteStartObject();
-        writer.WriteString("event", alert.Kind.ToString().ToLowerInvariant());
+        writer.WriteString("event", digest.IsTest ? "test" : "alerts");
         writer.WriteString("text", message.Subject);
         writer.WriteString("content", message.Subject);
         writer.WriteString("message", message.Body);
-        writer.WriteNumber("thresholdDays", alert.ThresholdDays);
 
-        writer.WriteStartObject("item");
-        ItemJson.WriteProperties(writer, alert.Item, now);
-        if (alert.PreviousExpiresAt is { } previous)
+        writer.WriteStartArray("alerts");
+        foreach (var alert in digest.Alerts)
         {
-            writer.WriteString("previousExpiresAt", previous);
+            writer.WriteStartObject();
+            writer.WriteString("event", alert.Kind.ToString().ToLowerInvariant());
+            writer.WriteString("headline", AlertMessage.Headline(alert));
+            writer.WriteNumber("thresholdDays", alert.ThresholdDays);
+            writer.WriteStartObject("item");
+            ItemJson.WriteProperties(writer, alert.Item, now);
+            if (alert.PreviousExpiresAt is { } previous)
+            {
+                writer.WriteString("previousExpiresAt", previous);
+            }
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
         }
 
-        writer.WriteEndObject();
+        writer.WriteEndArray();
         writer.WriteEndObject();
     });
 
-    public static byte[] Teams(PlannedAlert alert) => Json(writer =>
+    public static byte[] Teams(AlertDigest digest) => Json(writer =>
     {
-        var message = AlertMessage.For(alert);
+        var message = AlertMessage.For(digest);
         writer.WriteStartObject();
         writer.WriteString("type", "message");
         writer.WriteStartArray("attachments");
@@ -49,11 +62,12 @@ internal static class AlertPayloads
         writer.WriteEndObject();
     });
 
-    public static byte[] Telegram(PlannedAlert alert, string chatId) => Json(writer =>
+    public static byte[] Telegram(AlertDigest digest, string chatId) => Json(writer =>
     {
+        var body = AlertMessage.For(digest).Body;
         writer.WriteStartObject();
         writer.WriteString("chat_id", chatId);
-        writer.WriteString("text", AlertMessage.For(alert).Body);
+        writer.WriteString("text", body.Length <= TelegramMaxLength ? body : body[..TelegramMaxLength] + "\n…");
         writer.WriteBoolean("disable_web_page_preview", true);
         writer.WriteEndObject();
     });

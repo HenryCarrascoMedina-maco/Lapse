@@ -35,8 +35,9 @@ Alerts sent: 3 · already sent before (skipped): 1
 | Manual items (licenses, contracts) | |
 | Discovery through Certificate Transparency | |
 | Owners, backups and automatic owners for Entra applications | |
-| Email, webhook, Microsoft Teams and Telegram alerts, never duplicated | |
+| Email, webhook, Microsoft Teams and Telegram alerts, grouped per scan and never duplicated | |
 | Renewal verification | |
+| Alerts for items that cannot be read and for certificates with the wrong name | |
 | Visual HTML report that works offline | |
 | `lapse check` for CI pipelines | |
 
@@ -50,7 +51,7 @@ Lapse closes that loop in four steps:
 
 1. **Discover** what expires, including what nobody registered (`lapse discover`).
 2. **Assign** each item to an owner with a backup.
-3. **Alert** at 30, 14, 7 and 1 days. Critical alerts also reach the backup.
+3. **Alert** at 30, 14, 7 and 1 days. Critical alerts also reach the backup, and an item Lapse cannot read for a day raises its own alert.
 4. **Verify** the renewal: it only counts once a scan sees the new date.
 
 ## Security
@@ -97,7 +98,7 @@ lapse scan                      # checks everything, stores the result and sends
 lapse discover your-domain.com  # certificates of your domain you are not watching yet
 ```
 
-Then edit `lapse.json` with your owners, hosts, domains and files:
+Then edit `lapse.json` with your owners, hosts, domains and files. Editors such as VS Code complete and validate it through its [JSON schema](lapse.schema.json):
 
 ```jsonc
 {
@@ -128,12 +129,13 @@ Full reference: [docs/configuration.md](docs/configuration.md).
 |---|---|
 | `lapse init` | Creates an example `lapse.json`. `--force` replaces it. |
 | `lapse scan` | Scans, stores and sends pending alerts. `--all` shows everything, `--no-notify` sends nothing, `--json` prints JSON. |
-| `lapse check` | Scans without alerting and fails if anything expires before `--min-days` (14 by default). Meant for CI. |
+| `lapse check` | Scans without alerting and fails if anything expires before `--min-days` (14 by default), cannot be verified or has a certificate problem. Meant for CI. |
 | `lapse list` | Shows the last stored inventory without connecting to anything. |
 | `lapse export -o file.json` | Exports the inventory, for example as audit evidence. |
 | `lapse report` | Creates a visual HTML report with filters and search. It works offline and loads nothing from the internet. `--from` builds it from an export file. |
 | `lapse discover domain` | Searches Certificate Transparency for certificates issued to the domain. |
 | `lapse watch --every 6h` | Scans periodically and reloads the configuration on every cycle. |
+| `lapse notify test` | Sends a test message through every configured alert channel. `--channel` tests only one. |
 
 Common options: `-c, --config` (defaults to `lapse.json`) and `--db` (defaults to `lapse.db` next to the configuration).
 
@@ -166,7 +168,7 @@ lapse.json ──► ConfigLoader ──► WatchPlan
                                    ▼
                               Reconciler  ──►  SQLite (lapse.db)
                                    ▼
-                              AlertPlanner ──►  EmailNotifier · WebhookNotifier   (INotifier)
+                              AlertPlanner ──►  Email · Webhook · Teams · Telegram   (INotifier)
 ```
 
 The code has three projects and one strict rule: **the core depends on nothing.**

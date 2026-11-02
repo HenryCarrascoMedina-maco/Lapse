@@ -53,14 +53,21 @@ internal static class ScanCommand
         return report.Delivery.Failures.Count > 0 ? ExitCodes.DeliveryFailed : ExitCodes.Success;
     }
 
-    private static string? NoteFor(Reconciliation entry) => entry.Outcome switch
+    private static string? NoteFor(Reconciliation entry)
     {
-        ScanOutcome.Failed => entry.Item.LastError,
-        ScanOutcome.Renewed => $"was: {ItemRows.FormatDate(entry.PreviousExpiresAt)}",
-        ScanOutcome.Changed => $"expiry moved earlier; was: {ItemRows.FormatDate(entry.PreviousExpiresAt)}",
-        ScanOutcome.New => "new",
-        _ => null,
-    };
+        var note = entry.Outcome switch
+        {
+            ScanOutcome.Failed => entry.Item.LastError,
+            ScanOutcome.Renewed => $"was: {ItemRows.FormatDate(entry.PreviousExpiresAt)}",
+            ScanOutcome.Changed => $"expiry moved earlier; was: {ItemRows.FormatDate(entry.PreviousExpiresAt)}",
+            ScanOutcome.New => "new",
+            _ => null,
+        };
+
+        return entry.Outcome == ScanOutcome.Failed || entry.Item.Problem is null
+            ? note
+            : string.Join("; ", new[] { note, entry.Item.Problem }.OfType<string>());
+    }
 
     private static void WriteSummary(LapseRuntime runtime, ScanOptions options, ScanReport report, int hidden)
     {
@@ -86,7 +93,18 @@ internal static class ScanCommand
         Terminal.Line($"Alerts sent: {delivery.Sent} · already sent before (skipped): {delivery.Skipped}");
         foreach (var failure in delivery.Failures)
         {
-            Terminal.Error($"Could not send the alert for {failure.Key.Value} via {failure.Channel}: {failure.Error}");
+            var what = failure.Keys.Count == 1 ? $"the alert for {failure.Keys[0].Value}" : Terminal.Count(failure.Keys.Count, "alert", "alerts");
+            Terminal.Error($"Could not send {what} via {failure.Channel}: {failure.Error}");
+        }
+
+        if (delivery.Failures.Count > 0)
+        {
+            Terminal.Line("They will be retried on the next scan. To check a channel: lapse notify test");
+        }
+
+        if (delivery.Unreachable.Count > 0)
+        {
+            Terminal.Error($"No alert channel reaches the owner of {string.Join(", ", delivery.Unreachable.Select(key => key.Value))}. Give the owner an email address or add a chat channel.");
         }
     }
 
@@ -103,10 +121,23 @@ internal static class ScanCommand
         foreach (var failure in report.Delivery.Failures)
         {
             writer.WriteStartObject();
-            writer.WriteString("key", failure.Key.Value);
+            writer.WriteStartArray("keys");
+            foreach (var key in failure.Keys)
+            {
+                writer.WriteStringValue(key.Value);
+            }
+
+            writer.WriteEndArray();
             writer.WriteString("channel", failure.Channel);
             writer.WriteString("error", failure.Error);
             writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+        writer.WriteStartArray("unreachable");
+        foreach (var key in report.Delivery.Unreachable)
+        {
+            writer.WriteStringValue(key.Value);
         }
 
         writer.WriteEndArray();

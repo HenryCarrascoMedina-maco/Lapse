@@ -41,7 +41,7 @@ public static class Reconciler
         new(target.Key, target.Key, target.Name, target.Owner, ExpiresAt: null, ItemStatus.Failing, now, LastError: null);
 
     private static Reconciliation Failed(Item item, string error, DateTimeOffset now) => new(
-        item with { Status = ItemStatus.Failing, LastScannedAt = now, LastError = error },
+        item with { Status = ItemStatus.Failing, LastScannedAt = now, LastError = error, FailingSince = item.FailingSince ?? now },
         ScanOutcome.Failed,
         item.ExpiresAt,
         Observation: null);
@@ -57,7 +57,9 @@ public static class Reconciler
             observation.ExpiresAt,
             outcome == ScanOutcome.Renewed ? ItemStatus.Renewed : ItemStatus.Active,
             now,
-            LastError: null);
+            LastError: null,
+            FailingSince: null,
+            observation.Problem);
         return new Reconciliation(item, outcome, previous?.ExpiresAt, observation);
     }
 

@@ -16,12 +16,13 @@ namespace Lapse.Cli;
 
 internal sealed class LapseRuntime : IAsyncDisposable
 {
-    private LapseRuntime(LapseConfiguration configuration, SqliteItemStore store, HttpClient http, ScanPipeline pipeline, TimeProvider time)
+    private LapseRuntime(LapseConfiguration configuration, SqliteItemStore store, HttpClient http, IReadOnlyList<INotifier> notifiers, ScanPipeline pipeline, TimeProvider time)
     {
         Time = time;
         Configuration = configuration;
         Store = store;
         Http = http;
+        Notifiers = notifiers;
         Pipeline = pipeline;
     }
 
@@ -33,13 +34,16 @@ internal sealed class LapseRuntime : IAsyncDisposable
 
     public HttpClient Http { get; }
 
+    public IReadOnlyList<INotifier> Notifiers { get; }
+
     public ScanPipeline Pipeline { get; }
 
     public TimeProvider Time { get; }
 
-    public static async Task<int> RunAsync(ParseResult parseResult, Func<LapseRuntime, Task<int>> action, CancellationToken cancellationToken)
+    // withAlerts: false for commands that never send alerts, so they do not need the alert channel secrets.
+    public static async Task<int> RunAsync(ParseResult parseResult, Func<LapseRuntime, Task<int>> action, CancellationToken cancellationToken, bool withAlerts = true)
     {
-        var started = await StartAsync(parseResult, cancellationToken);
+        var started = await StartAsync(parseResult, withAlerts, cancellationToken);
         if (!started.IsSuccess)
         {
             Terminal.Error(started.Error);
@@ -56,12 +60,13 @@ internal sealed class LapseRuntime : IAsyncDisposable
         await Store.DisposeAsync();
     }
 
-    private static async Task<Result<LapseRuntime>> StartAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    private static async Task<Result<LapseRuntime>> StartAsync(ParseResult parseResult, bool withAlerts, CancellationToken cancellationToken)
     {
         var loaded = await ConfigLoader.LoadAsync(
             parseResult.GetRequiredValue(GlobalOptions.Config),
             Environment.GetEnvironmentVariable,
-            cancellationToken);
+            cancellationToken,
+            withAlerts);
 
         if (!loaded.IsSuccess)
         {
@@ -95,11 +100,12 @@ internal sealed class LapseRuntime : IAsyncDisposable
             new EntraSource(http, configuration.EntraTenants),
         ];
 
-        var pipeline = new ScanPipeline(sources, Notifiers(configuration, http, time), store, time);
-        return Result.Success(new LapseRuntime(configuration, store, http, pipeline, time));
+        INotifier[] notifiers = [.. CreateNotifiers(configuration, http, time)];
+        var pipeline = new ScanPipeline(sources, notifiers, store, time);
+        return Result.Success(new LapseRuntime(configuration, store, http, notifiers, pipeline, time));
     }
 
-    private static IEnumerable<INotifier> Notifiers(LapseConfiguration configuration, HttpClient http, TimeProvider time)
+    private static IEnumerable<INotifier> CreateNotifiers(LapseConfiguration configuration, HttpClient http, TimeProvider time)
     {
         if (configuration.Email is { } email)
         {

@@ -75,6 +75,7 @@ public sealed class AlertPolicy
         (ItemStatus.Failing, _) => ItemHealth.Error,
         (_, Urgency.Expired) => ItemHealth.Expired,
         (_, Urgency.Critical) => ItemHealth.Critical,
+        _ when item.Problem is not null => ItemHealth.Warning,
         (ItemStatus.Renewed, _) => ItemHealth.Renewed,
         (_, Urgency.Warning) => ItemHealth.Warning,
         (_, Urgency.Ok) => ItemHealth.Ok,

@@ -6,10 +6,17 @@ namespace Lapse.Infrastructure.Tests;
 
 internal static class TestCertificates
 {
-    public static X509Certificate2 Create(DateTimeOffset notAfter)
+    public static X509Certificate2 Create(DateTimeOffset notAfter, IPAddress? issuedFor = null)
     {
         using var key = RSA.Create(2048);
         var request = new CertificateRequest("CN=lapse.test", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        if (issuedFor is not null)
+        {
+            var names = new SubjectAlternativeNameBuilder();
+            names.AddIpAddress(issuedFor);
+            request.CertificateExtensions.Add(names.Build());
+        }
+
         using var created = request.CreateSelfSigned(notAfter.AddDays(-30), notAfter);
 
         return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pkcs12), password: null, X509KeyStorageFlags.Exportable);

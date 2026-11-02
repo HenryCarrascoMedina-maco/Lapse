@@ -8,7 +8,8 @@ public static class ConfigLoader
     public static async Task<Result<LapseConfiguration>> LoadAsync(
         string path,
         Func<string, string?> readEnvironment,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool withAlerts = true)
     {
         var fullPath = Path.GetFullPath(path);
         if (!File.Exists(fullPath))
@@ -29,6 +30,6 @@ public static class ConfigLoader
 
         return document is null
             ? Result.Failure<LapseConfiguration>("The configuration is empty.")
-            : new ConfigValidator(document, Path.GetDirectoryName(fullPath)!, readEnvironment).Validate();
+            : new ConfigValidator(document, Path.GetDirectoryName(fullPath)!, readEnvironment, withAlerts).Validate();
     }
 }

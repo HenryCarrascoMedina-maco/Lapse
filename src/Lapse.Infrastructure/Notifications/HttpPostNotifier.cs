@@ -11,33 +11,41 @@ public sealed class HttpPostNotifier : INotifier
     private readonly HttpClient http;
     private readonly Secret url;
     private readonly string displayName;
-    private readonly Func<PlannedAlert, byte[]> payload;
+    private readonly Func<AlertDigest, byte[]> payload;
 
-    private HttpPostNotifier(string channel, string displayName, HttpClient http, Secret url, Func<PlannedAlert, byte[]> payload)
+    private HttpPostNotifier(string channel, string displayName, int maxAlertsPerMessage, HttpClient http, Secret url, Func<AlertDigest, byte[]> payload)
     {
         Channel = channel;
+        MaxAlertsPerMessage = maxAlertsPerMessage;
         this.displayName = displayName;
         this.http = http;
         this.url = url;
         this.payload = payload;
     }
 
+    // Telegram accepts 4096 characters and an alert takes about 400.
+    private const int TelegramAlertsPerMessage = 8;
+
     public string Channel { get; }
 
+    public int MaxAlertsPerMessage { get; }
+
     public static HttpPostNotifier Webhook(HttpClient http, Secret url, TimeProvider time) =>
-        new("webhook", "the webhook", http, url, alert => AlertPayloads.Webhook(alert, time.GetUtcNow()));
+        new("webhook", "the webhook", 20, http, url, digest => AlertPayloads.Webhook(digest, time.GetUtcNow()));
 
     public static HttpPostNotifier Teams(HttpClient http, Secret url) =>
-        new("teams", "Microsoft Teams", http, url, AlertPayloads.Teams);
+        new("teams", "Microsoft Teams", 20, http, url, AlertPayloads.Teams);
 
     public static HttpPostNotifier Telegram(HttpClient http, Secret botToken, string chatId) =>
-        new("telegram", "Telegram", http, new Secret($"https://api.telegram.org/bot{botToken.Reveal()}/sendMessage"), alert => AlertPayloads.Telegram(alert, chatId));
+        new("telegram", "Telegram", TelegramAlertsPerMessage, http, new Secret($"https://api.telegram.org/bot{botToken.Reveal()}/sendMessage"), digest => AlertPayloads.Telegram(digest, chatId));
 
-    public bool CanDeliver(PlannedAlert alert) => true;
+    public bool IsPerRecipient => false;
 
-    public async Task<Result<Unit>> SendAsync(PlannedAlert alert, CancellationToken cancellationToken)
+    public bool CanDeliver(IReadOnlyList<Owner> recipients) => true;
+
+    public async Task<Result<Unit>> SendAsync(AlertDigest digest, CancellationToken cancellationToken)
     {
-        using var content = new ByteArrayContent(payload(alert));
+        using var content = new ByteArrayContent(payload(digest));
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
         try

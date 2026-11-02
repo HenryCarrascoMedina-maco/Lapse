@@ -32,8 +32,22 @@ internal static class WatchCommand
 
             for (var first = true; !cancellationToken.IsCancellationRequested; first = false)
             {
-                var exitCode = await LapseRuntime.RunAsync(parse, runtime =>
-                    ScanCommand.RunAsync(runtime, new ScanOptions(ShowAll: false, Notify: true, Json: false), cancellationToken), cancellationToken);
+                int exitCode;
+                try
+                {
+                    exitCode = await LapseRuntime.RunAsync(parse, runtime =>
+                        ScanCommand.RunAsync(runtime, new ScanOptions(ShowAll: false, Notify: true, Json: false), cancellationToken), cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    // One failed cycle must not stop the watch: the next one may succeed.
+                    Terminal.Error($"The scan failed: {ex.Message}. Retrying in {text}.");
+                    exitCode = ExitCodes.ExternalServiceError;
+                }
 
                 if (first && exitCode == ExitCodes.ConfigurationError)
                 {

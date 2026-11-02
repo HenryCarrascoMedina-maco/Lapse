@@ -11,7 +11,9 @@ namespace Lapse.Infrastructure.Configuration;
 
 internal sealed record TargetSpec(ItemKey Key, DateTimeOffset? ExpiresAt = null, string? DisplayName = null);
 
-internal sealed class ConfigValidator(ConfigDocument document, string baseDirectory, Func<string, string?> readEnvironment)
+// Without alerts (check, list, report...) the alert channels are still checked, but their secrets are not read,
+// so those commands work where only the scanning secrets are available, such as a CI pipeline.
+internal sealed class ConfigValidator(ConfigDocument document, string baseDirectory, Func<string, string?> readEnvironment, bool withAlerts = true)
 {
     private const int DefaultSmtpPort = 587;
 
@@ -30,7 +32,9 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
 
         return errors.Count > 0
             ? Result.Failure<LapseConfiguration>("The configuration has errors:" + string.Concat(errors.Select(error => $"{Environment.NewLine}  - {error}")))
-            : Result.Success(new LapseConfiguration(new WatchPlan(targets, owners, policy!), email, webhook, teams, telegram, entraTenants, baseDirectory));
+            : Result.Success(withAlerts
+                ? new LapseConfiguration(new WatchPlan(targets, owners, policy!), email, webhook, teams, telegram, entraTenants, baseDirectory, document.Defaults?.Owner)
+                : new LapseConfiguration(new WatchPlan(targets, owners, policy!), null, null, null, null, entraTenants, baseDirectory, document.Defaults?.Owner));
     }
 
     private Dictionary<string, Owner> ReadOwners()
@@ -254,6 +258,16 @@ internal sealed class ConfigValidator(ConfigDocument document, string baseDirect
 
     private Secret? ReadSecret(string location, string? reference, string suggestedVariable)
     {
+        if (!withAlerts)
+        {
+            if (string.IsNullOrWhiteSpace(reference) || !SecretResolver.IsReference(reference))
+            {
+                errors.Add($"{location}: {ResolveSecret(reference, suggestedVariable).Error}");
+            }
+
+            return null;
+        }
+
         var secret = ResolveSecret(reference, suggestedVariable);
         if (!secret.IsSuccess)
         {

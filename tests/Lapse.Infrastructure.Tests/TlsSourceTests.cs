@@ -42,6 +42,45 @@ public sealed class TlsSourceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Reports_a_certificate_issued_for_another_name()
+    {
+        using var certificate = TestCertificates.Create(Dates.Now.AddDays(45));
+        var server = ServeAsync(certificate);
+
+        var result = await source.ObserveAsync(Target(host: "localhost"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal("the certificate is not valid for the name localhost", Assert.Single(result.Value).Problem);
+        await server;
+    }
+
+    [Fact]
+    public async Task Target_written_as_an_ip_address_is_not_checked_against_the_name()
+    {
+        using var certificate = TestCertificates.Create(Dates.Now.AddDays(45));
+        var server = ServeAsync(certificate);
+
+        var result = await source.ObserveAsync(Target(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Null(Assert.Single(result.Value).Problem);
+        await server;
+    }
+
+    [Fact]
+    public async Task Certificate_issued_for_the_host_has_no_problem()
+    {
+        using var certificate = TestCertificates.Create(Dates.Now.AddDays(45), IPAddress.Loopback);
+        var server = ServeAsync(certificate);
+
+        var result = await source.ObserveAsync(Target(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Null(Assert.Single(result.Value).Problem);
+        await server;
+    }
+
+    [Fact]
     public async Task Reports_a_refused_connection()
     {
         listener.Start();
@@ -149,9 +188,9 @@ public sealed class TlsSourceTests : IAsyncDisposable
 
     private int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
 
-    private WatchTarget Target(string? scheme = null, int? port = null)
+    private WatchTarget Target(string? scheme = null, int? port = null, string host = "127.0.0.1")
     {
-        var endpoint = $"127.0.0.1:{port ?? Port}";
+        var endpoint = $"{host}:{port ?? Port}";
         return new(new ItemKey(ItemKind.Tls, scheme is null ? endpoint : $"{scheme}://{endpoint}"), "it");
     }
 

@@ -5,6 +5,10 @@ namespace Lapse.Infrastructure.Configuration;
 
 internal sealed class ConfigDocument
 {
+    // Only read by editors, for completion and validation.
+    [JsonPropertyName("$schema")]
+    public string? Schema { get; init; }
+
     public IReadOnlyDictionary<string, OwnerDocument>? Owners { get; init; }
 
     public DefaultsDocument? Defaults { get; init; }

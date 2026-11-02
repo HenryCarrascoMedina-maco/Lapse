@@ -3,7 +3,7 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ["site/**", "src/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "src/**", "lapse.schema.json", ".github/workflows/pages.yml"]
   schedule:
     - cron: "0 5 * * 1"
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
       - name: Build site
         run: |
           mkdir -p _site
-          cp site/index.html _site/
+          cp site/index.html lapse.schema.json _site/
           dotnet run site/demo-data.cs -- demo.json
           dotnet run --project src/Lapse.Cli -c Release -- report --from demo.json -o _site/demo.html
 

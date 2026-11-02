@@ -34,7 +34,7 @@ internal static class LapseCommands
 {
     public static RootCommand Create()
     {
-        var root = new RootCommand("Lapse watches certificates, domains and certificate files, and warns before they expire.");
+        var root = new RootCommand("Lapse watches TLS certificates, domains, certificate files, SAML metadata and Entra ID secrets, and warns before they expire.");
         root.Options.Add(GlobalOptions.Config);
         root.Options.Add(GlobalOptions.Database);
 
@@ -46,6 +46,7 @@ internal static class LapseCommands
         root.Subcommands.Add(ReportCommand.Create());
         root.Subcommands.Add(DiscoverCommand.Create());
         root.Subcommands.Add(WatchCommand.Create());
+        root.Subcommands.Add(NotifyCommand.Create());
         return root;
     }
 }

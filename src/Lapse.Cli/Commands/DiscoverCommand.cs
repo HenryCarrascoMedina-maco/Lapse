@@ -51,7 +51,7 @@ internal static class DiscoverCommand
             }
 
             return ExitCodes.Success;
-        }, cancellationToken));
+        }, cancellationToken, withAlerts: false));
         return command;
     }
 

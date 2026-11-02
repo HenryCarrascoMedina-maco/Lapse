@@ -2,7 +2,11 @@
 
 Lapse reads a JSON file, `lapse.json` in the current folder by default (change it with `-c`). Comments (`//`) and trailing commas are allowed. Unknown properties are an error, so typos such as `"pasword"` are caught.
 
-`lapse init` creates an example file that runs as is.
+`lapse init` creates an example file that runs as is. Its first line points to the [JSON schema](../lapse.schema.json), so editors such as VS Code complete and validate the file as you type:
+
+```json
+{ "$schema": "https://henrycarrascomedina-maco.github.io/Lapse/lapse.schema.json" }
+```
 
 ## Structure
 
@@ -43,6 +47,19 @@ Owners identified by a short name.
 
 Each alert is sent once per threshold. If a scan finds an item with 5 days left, it only sends the 7-day alert, not the 30- and 14-day ones. When the item is renewed, thresholds start over for the new date.
 
+Besides the thresholds, Lapse sends these alerts:
+
+| Alert | When | Recipients |
+|---|---|---|
+| Expired | The date has passed. | Owner and backup |
+| Renewal verified | A scan sees a later date for an item someone was warned about. It is announced even if the first scan to see it was `check` or `scan --no-notify`. | Owner |
+| Could not be verified | The item has failed every scan for about a day (host down, file missing, credentials rejected). Sent once until it recovers. | Owner |
+| Certificate problem | The certificate is not valid for the host name, or a certificate of its chain expires before it. | Owner |
+
+While an item cannot be read, its last observed date keeps counting down, so threshold alerts still arrive.
+
+All the alerts of a scan are grouped: one email per group of recipients and one message per chat channel, most urgent first. Long digests are split so each message fits the channel: 8 alerts per Telegram message, 20 per Teams or webhook message.
+
 ## `watch`
 
 Each section is a list. An entry can be a string or an object with its own `owner`.
@@ -56,6 +73,8 @@ TLS certificates, as `host:port`. Without a port, 443 is used.
 ```
 
 This works with any service that speaks TLS from the first byte: HTTPS, LDAPS (636), IMAPS (993), SMTPS (465). Lapse reads the certificate even if it is expired or untrusted.
+
+Lapse also reports a certificate that is not valid for the host name (except for targets written as an IP address), and an intermediate certificate that expires before the server certificate. It does not report untrusted chains, because internal certificate authorities are common and the machine running Lapse may not trust them.
 
 Services that upgrade a plain connection to TLS are written with their protocol:
 
@@ -152,23 +171,32 @@ Without channels, `scan` works the same but sends no alerts.
 |---|---|
 | `url` | **Reference** to the URL. It must use HTTPS (`http://localhost` is allowed). |
 
-Lapse sends a `POST` with this JSON:
+Lapse sends one `POST` per scan with every pending alert:
 
 ```json
 {
-  "event": "threshold",
-  "text": "[Lapse] api.acme.com:443 expires in 5 days",
-  "content": "[Lapse] api.acme.com:443 expires in 5 days",
-  "message": "api.acme.com:443 expires in 5 days\n\nItem: ...",
-  "thresholdDays": 7,
-  "item": {
-    "kind": "tls", "key": "api.acme.com:443", "name": "api.acme.com:443",
-    "owner": "it", "expiresAt": "2026-10-03T23:59:59+00:00", "daysRemaining": 5
-  }
+  "event": "alerts",
+  "text": "[Lapse] api.acme.com:443 expires in 5 days, and 1 more",
+  "content": "[Lapse] api.acme.com:443 expires in 5 days, and 1 more",
+  "message": "2 alerts:
+
+api.acme.com:443 expires in 5 days
+  Item: ...",
+  "alerts": [
+    {
+      "event": "threshold",
+      "headline": "api.acme.com:443 expires in 5 days",
+      "thresholdDays": 7,
+      "item": {
+        "kind": "tls", "key": "api.acme.com:443", "name": "api.acme.com:443",
+        "owner": "it", "expiresAt": "2026-10-03T23:59:59+00:00", "daysRemaining": 5
+      }
+    }
+  ]
 }
 ```
 
-`event` is `threshold`, `expired` or `renewed`. Slack and Mattermost display `text` and Discord displays `content`, so an incoming webhook from any of them works without changes.
+The top-level `event` is `alerts`, or `test` for `lapse notify test`. Each alert's `event` is `threshold`, `expired`, `renewed`, `unverified` or `problem`. The item includes `error` when it could not be read and `problem` when its certificate has one. Slack and Mattermost display `text` and Discord displays `content`, so an incoming webhook from any of them works without changes.
 
 ### `teams`
 
@@ -184,6 +212,10 @@ Lapse posts an Adaptive Card with the alert subject and details.
 |---|---|
 | `botToken` | **Reference** to the token given by @BotFather. |
 | `chatId` | Chat, group or channel that receives the alerts. |
+
+## Testing the channels
+
+`lapse notify test` sends a test message through every configured channel and says which ones failed and why. `check`, `list`, `export`, `report` and `discover` never send alerts, so they do not need the channel secrets. The test email goes to `defaults.owner`, or to the owner given with `--owner`. `--channel teams` tests a single channel.
 
 ## Secret references
 

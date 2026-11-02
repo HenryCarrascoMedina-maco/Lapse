@@ -28,7 +28,7 @@ internal static class ExportCommand
 
             Terminal.Line($"Exported the inventory ({Terminal.Count(rows.Count, "item", "items")}) to {path}");
             return ExitCodes.Success;
-        }, cancellationToken));
+        }, cancellationToken, withAlerts: false));
         return command;
     }
 }

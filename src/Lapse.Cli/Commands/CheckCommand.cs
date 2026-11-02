@@ -32,7 +32,7 @@ internal static class CheckCommand
         };
 
         command.SetAction((parse, cancellationToken) => LapseRuntime.RunAsync(parse, runtime =>
-            RunAsync(runtime, parse.GetValue(minDays), parse.GetValue(ignoreErrors), parse.GetValue(json), cancellationToken), cancellationToken));
+            RunAsync(runtime, parse.GetValue(minDays), parse.GetValue(ignoreErrors), parse.GetValue(json), cancellationToken), cancellationToken, withAlerts: false));
         return command;
     }
 
@@ -44,7 +44,8 @@ internal static class CheckCommand
 
         var expiring = rows.Where(row => row.Item.ExpiresAt is { } expiresAt && AlertPolicy.DaysRemaining(expiresAt, now) < minDays).ToList();
         var unverified = ignoreErrors ? [] : rows.Where(row => row.Health == ItemHealth.Error).ToList();
-        var problems = expiring.Union(unverified).ToList();
+        var invalid = rows.Where(row => row.Health != ItemHealth.Error && row.Item.Problem is not null).ToList();
+        var problems = expiring.Union(unverified).Union(invalid).ToList();
 
         if (json)
         {
@@ -60,7 +61,7 @@ internal static class CheckCommand
         }
         else if (problems.Count == 0)
         {
-            Terminal.Line(Terminal.Paint($"All good: nothing expires in the next {minDays} days.", Tone.Good));
+            Terminal.Line(Terminal.Paint($"All good: nothing expires in the next {minDays} days and no certificate has problems.", Tone.Good));
         }
         else
         {
@@ -74,6 +75,11 @@ internal static class CheckCommand
             if (unverified.Count > 0)
             {
                 Terminal.Error($"{Terminal.Count(unverified.Count, "item", "items")} could not be verified.");
+            }
+
+            if (invalid.Count > 0)
+            {
+                Terminal.Error($"{Terminal.Count(invalid.Count, "item has", "items have")} a certificate problem.");
             }
         }
 

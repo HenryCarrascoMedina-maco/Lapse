@@ -23,5 +23,15 @@ public static class ItemJson
             writer.WriteNull("expiresAt");
             writer.WriteNull("daysRemaining");
         }
+
+        if (item.LastError is { } error)
+        {
+            writer.WriteString("error", error);
+        }
+
+        if (item.Problem is { } problem)
+        {
+            writer.WriteString("problem", problem);
+        }
     }
 }

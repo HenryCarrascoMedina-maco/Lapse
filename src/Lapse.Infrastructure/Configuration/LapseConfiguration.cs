@@ -14,4 +14,5 @@ public sealed record LapseConfiguration(
     Secret? TeamsUrl,
     TelegramSettings? Telegram,
     IReadOnlyList<EntraTenant> EntraTenants,
-    string BaseDirectory);
+    string BaseDirectory,
+    string? DefaultOwner = null);

@@ -5,6 +5,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- `lapse notify test` sends a test message through every alert channel and explains why a channel fails.
+- A JSON schema for `lapse.json`; `lapse init` references it so editors complete and validate the file.
+- An alert when an item has failed every scan for a day, sent once until it recovers.
+- TLS targets report a certificate that is not valid for the host name, or whose chain expires first. It raises an alert and makes `lapse check` fail.
+- Alerts say what to do next, and name the source of items that come from a tenant or metadata URL.
+
+### Changed
+
+- **Breaking:** alerts are grouped: one email per group of recipients and one webhook, Teams or Telegram message per scan, split when it would be too long for the channel. The webhook payload now carries an `alerts` array instead of a single `item`.
+- **Breaking:** in `scan --json`, each entry of `alerts.failures` lists its items in `keys` instead of a single `key`, and `alerts.unreachable` lists the items no channel can reach.
+- A renewal is announced when the date observed before the new one had been warned about, so `check` and `scan --no-notify` no longer swallow it, and a channel that failed gets it on the next scan. Renewals nobody was warned about are not announced.
+- `check`, `list`, `export`, `report` and `discover` no longer need the alert channel secrets, so `check` runs in CI with only the scanning secrets.
+- `watch` keeps running when a cycle fails unexpectedly, and an unexpected error in one target no longer stops the whole scan.
+- `scan` warns when an alert has no channel that reaches its owner, such as an owner without email when email is the only channel.
+- The observation history only records new dates or certificates, instead of a row per scan.
+- SMTP errors say whether the connection, TLS, the credentials or an address failed.
+
+### Fixed
+
+- An item that could not be read stopped receiving alerts, even when its last observed date was about to expire.
+
 ## [0.2.0] - 2026-09-27
 
 ### Added

@@ -8,12 +8,22 @@ namespace Lapse.Infrastructure.Storage;
 public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
 {
     private const string UpsertItem = """
-        INSERT INTO items (kind, key, target_kind, target_key, name, owner, expires_at, status, last_scanned_at, last_error)
-        VALUES ($kind, $key, $targetKind, $targetKey, $name, $owner, $expiresAt, $status, $scannedAt, $error)
+        INSERT INTO items (kind, key, target_kind, target_key, name, owner, expires_at, status, last_scanned_at, last_error, failing_since, problem)
+        VALUES ($kind, $key, $targetKind, $targetKey, $name, $owner, $expiresAt, $status, $scannedAt, $error, $failingSince, $problem)
         ON CONFLICT (kind, key) DO UPDATE SET
             target_kind = excluded.target_kind, target_key = excluded.target_key, name = excluded.name, owner = excluded.owner, expires_at = excluded.expires_at,
-            status = excluded.status, last_scanned_at = excluded.last_scanned_at, last_error = excluded.last_error
+            status = excluded.status, last_scanned_at = excluded.last_scanned_at, last_error = excluded.last_error,
+            failing_since = excluded.failing_since, problem = excluded.problem
         RETURNING id
+        """;
+
+    // Only a new expiry date or certificate is recorded, so the history shows renewals instead of every scan.
+    private const string InsertObservation = """
+        INSERT INTO observations (item_id, observed_at, expires_at, fingerprint)
+        SELECT $id, $at, $expiresAt, $fingerprint
+        WHERE NOT EXISTS (
+            SELECT 1 FROM (SELECT expires_at, fingerprint FROM observations WHERE item_id = $id ORDER BY observed_at DESC LIMIT 1) last
+            WHERE last.expires_at = $expiresAt AND last.fingerprint IS $fingerprint)
         """;
 
     private const string AlertFilter = """
@@ -32,7 +42,7 @@ public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
     public async Task<IReadOnlyDictionary<ItemKey, Item>> GetItemsAsync(CancellationToken cancellationToken)
     {
         await using var command = connection.Command(
-            "SELECT kind, key, target_kind, target_key, name, owner, expires_at, status, last_scanned_at, last_error FROM items");
+            "SELECT kind, key, target_kind, target_key, name, owner, expires_at, status, last_scanned_at, last_error, failing_since, problem FROM items");
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var items = new Dictionary<ItemKey, Item>();
@@ -46,7 +56,9 @@ public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
                 reader.IsDBNull(6) ? null : SqliteDatabase.Parse(reader.GetString(6)),
                 Enum.Parse<ItemStatus>(reader.GetString(7), ignoreCase: true),
                 SqliteDatabase.Parse(reader.GetString(8)),
-                reader.IsDBNull(9) ? null : reader.GetString(9));
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                reader.IsDBNull(10) ? null : SqliteDatabase.Parse(reader.GetString(10)),
+                reader.IsDBNull(11) ? null : reader.GetString(11));
             items[item.Key] = item;
         }
 
@@ -66,7 +78,7 @@ public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
             if (reconciliation.Observation is { } observation)
             {
                 await using var insert = connection.Command(
-                    "INSERT INTO observations (item_id, observed_at, expires_at, fingerprint) VALUES ($id, $at, $expiresAt, $fingerprint)",
+                    InsertObservation,
                     transaction,
                     ("$id", itemId),
                     ("$at", SqliteDatabase.Format(reconciliation.Item.LastScannedAt)),
@@ -96,6 +108,25 @@ public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
             null,
             [.. AlertParameters(record), ("$sentAt", SqliteDatabase.Format(sentAt))]);
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<DateTimeOffset?> GetRenewedFromAsync(ItemKey key, DateTimeOffset currentExpiry, CancellationToken cancellationToken)
+    {
+        await using var command = connection.Command(
+            """
+            SELECT previous.expires_at FROM (
+                SELECT o.item_id, o.expires_at FROM observations o JOIN items i ON i.id = o.item_id
+                WHERE i.kind = $itemKind AND i.key = $key AND o.expires_at <> $current
+                ORDER BY o.observed_at DESC LIMIT 1) previous
+            WHERE previous.expires_at < $current AND EXISTS (
+                SELECT 1 FROM alerts_sent a
+                WHERE a.item_id = previous.item_id AND a.kind IN ('threshold', 'expired') AND a.expires_at = previous.expires_at)
+            """,
+            null,
+            ("$itemKind", Code(key.Kind)),
+            ("$key", key.Value),
+            ("$current", SqliteDatabase.Format(currentExpiry)));
+        return await command.ExecuteScalarAsync(cancellationToken) is string value ? SqliteDatabase.Parse(value) : null;
     }
 
     public ValueTask DisposeAsync() => connection.DisposeAsync();
@@ -130,7 +161,9 @@ public sealed class SqliteItemStore : IItemStore, IAsyncDisposable
             ("$expiresAt", item.ExpiresAt is { } expiresAt ? SqliteDatabase.Format(expiresAt) : null),
             ("$status", Code(item.Status)),
             ("$scannedAt", SqliteDatabase.Format(item.LastScannedAt)),
-            ("$error", item.LastError));
+            ("$error", item.LastError),
+            ("$failingSince", item.FailingSince is { } failingSince ? SqliteDatabase.Format(failingSince) : null),
+            ("$problem", item.Problem));
         return (long)(await command.ExecuteScalarAsync(cancellationToken))!;
     }
 

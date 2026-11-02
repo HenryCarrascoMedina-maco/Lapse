@@ -20,14 +20,17 @@ public sealed record Item(
     DateTimeOffset? ExpiresAt,
     ItemStatus Status,
     DateTimeOffset LastScannedAt,
-    string? LastError);
+    string? LastError,
+    DateTimeOffset? FailingSince = null,
+    string? Problem = null);
 
 public sealed record Observation(
     ItemKey Key,
     string Name,
     DateTimeOffset ExpiresAt,
     string? Fingerprint,
-    IReadOnlyList<string>? Contacts = null);
+    IReadOnlyList<string>? Contacts = null,
+    string? Problem = null);
 
 public sealed record WatchTarget(ItemKey Key, string Owner, DateTimeOffset? DeclaredExpiresAt = null, string? DisplayName = null)
 {

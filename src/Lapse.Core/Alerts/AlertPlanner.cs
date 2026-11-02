@@ -4,37 +4,57 @@ namespace Lapse.Core.Alerts;
 
 public static class AlertPlanner
 {
-    public static PlannedAlert? Plan(Reconciliation reconciliation, WatchPlan plan, DateTimeOffset now)
+    // Slightly under a day, so a scan scheduled every 6 or 24 hours that starts a few seconds early still counts.
+    public static readonly TimeSpan UnverifiedAfter = TimeSpan.FromHours(23);
+
+    // renewedFrom is the expiry date observed before the current one, when someone was warned about it.
+    // It comes from the store, so the renewal is announced whichever command first saw the new date.
+    public static IReadOnlyList<PlannedAlert> Plan(Reconciliation reconciliation, WatchPlan plan, DateTimeOffset now, DateTimeOffset? renewedFrom = null)
     {
         var item = reconciliation.Item;
-        if (reconciliation.Outcome == ScanOutcome.Failed || item.ExpiresAt is not { } expiresAt)
+        var verified = reconciliation.Outcome != ScanOutcome.Failed;
+        var alerts = new List<PlannedAlert>();
+
+        if (!verified && item.FailingSince is { } failingSince && now - failingSince >= UnverifiedAfter)
         {
-            return null;
+            alerts.Add(Create(AlertKind.Unverified, thresholdDays: 0, daysRemaining: null, includeBackup: false));
+        }
+
+        if (item.ExpiresAt is not { } expiresAt)
+        {
+            return alerts;
         }
 
         var days = AlertPolicy.DaysRemaining(expiresAt, now);
 
-        if (reconciliation.Outcome == ScanOutcome.Renewed)
+        if (verified && renewedFrom < expiresAt)
         {
-            return Create(AlertKind.Renewed, thresholdDays: 0, includeBackup: false);
+            alerts.Add(Create(AlertKind.Renewed, thresholdDays: 0, days, includeBackup: false, renewedFrom));
         }
 
+        if (verified && item.Problem is not null)
+        {
+            alerts.Add(Create(AlertKind.Problem, thresholdDays: 0, days, includeBackup: false));
+        }
+
+        // A failed scan keeps the last observed date, so the countdown goes on while Lapse cannot reach the item.
         if (expiresAt <= now)
         {
-            return Create(AlertKind.Expired, thresholdDays: 0, includeBackup: true);
+            alerts.Add(Create(AlertKind.Expired, thresholdDays: 0, days, includeBackup: true));
+        }
+        else if (plan.Policy.TightestThresholdReached(days) is { } threshold)
+        {
+            alerts.Add(Create(AlertKind.Threshold, threshold, days, includeBackup: days <= plan.Policy.CriticalDays));
         }
 
-        return plan.Policy.TightestThresholdReached(days) is { } threshold
-            ? Create(AlertKind.Threshold, threshold, includeBackup: days <= plan.Policy.CriticalDays)
-            : null;
+        return alerts;
 
-        PlannedAlert Create(AlertKind kind, int thresholdDays, bool includeBackup) => new(
+        PlannedAlert Create(AlertKind kind, int thresholdDays, int? daysRemaining, bool includeBackup, DateTimeOffset? previousExpiresAt = null) => new(
             item,
             kind,
             thresholdDays,
-            days,
-            expiresAt,
+            daysRemaining,
             plan.RecipientsFor(item.Owner, includeBackup),
-            reconciliation.PreviousExpiresAt);
+            previousExpiresAt);
     }
 }

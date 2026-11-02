@@ -55,7 +55,95 @@ public class ScanPipelineTests
         Assert.Equal(ScanOutcome.Renewed, renewal.Entries[0].Outcome);
         Assert.Equal([AlertKind.Threshold, AlertKind.Renewed, AlertKind.Threshold], email.Sent.Select(alert => alert.Kind));
         Assert.Equal(30, email.Sent[^1].ThresholdDays);
-        Assert.Equal(2, afterRenewal.Delivery.Sent);
+        Assert.Equal(2, email.Digests.Count);
+        Assert.Equal(0, afterRenewal.Delivery.Sent);
+    }
+
+    [Fact]
+    public async Task Renewal_seen_by_a_scan_without_alerts_is_still_announced()
+    {
+        source.Expires(Host, time.Now.AddDays(5));
+        await RunAsync();
+
+        source.Expires(Host, time.Now.AddDays(90));
+        await RunAsync(notify: false);
+        await RunAsync();
+
+        Assert.Equal([AlertKind.Threshold, AlertKind.Renewed], email.Sent.Select(alert => alert.Kind));
+    }
+
+    [Fact]
+    public async Task Renewal_is_retried_on_a_channel_that_failed()
+    {
+        source.Expires(Host, time.Now.AddDays(5));
+        await RunAsync();
+
+        source.Expires(Host, time.Now.AddDays(40));
+        webhook.FailWith = "down";
+        await RunAsync();
+        webhook.FailWith = null;
+        time.Now = time.Now.AddDays(15);
+        await RunAsync();
+
+        Assert.Equal([AlertKind.Threshold, AlertKind.Renewed, AlertKind.Threshold], webhook.Sent.Select(alert => alert.Kind));
+        Assert.Single(email.Sent, alert => alert.Kind == AlertKind.Renewed);
+    }
+
+    [Fact]
+    public async Task Long_digests_are_split_to_fit_the_channel()
+    {
+        var hosts = Enumerable.Range(0, 5).Select(index => $"host-{index}.example.com:443").ToList();
+        hosts.ForEach(host => source.Expires(host, time.Now.AddDays(5)));
+        var chat = new RecordingNotifier("telegram") { MaxAlertsPerMessage = 2 };
+
+        await new ScanPipeline([source], [chat], store, time).RunAsync(Plans.For([.. hosts.Select(host => Plans.Tls(host))]), notify: true, CancellationToken.None);
+
+        Assert.Equal([2, 2, 1], chat.Digests.Select(digest => digest.Alerts.Count));
+    }
+
+    [Fact]
+    public async Task Unreachable_item_keeps_alerting_with_its_last_observed_date()
+    {
+        source.Expires(Host, time.Now.AddDays(20));
+        await RunAsync();
+
+        source.Fails(Host, "no response");
+        time.Now = time.Now.AddDays(15);
+        await RunAsync();
+
+        Assert.Equal([30, 7], email.Sent.Select(alert => alert.ThresholdDays));
+    }
+
+    [Fact]
+    public async Task Item_that_stays_unreachable_raises_one_unverified_alert()
+    {
+        source.Fails(Host, "no response");
+        var first = await RunAsync();
+
+        time.Now = time.Now.AddDays(1);
+        await RunAsync();
+        time.Now = time.Now.AddDays(1);
+        await RunAsync();
+
+        Assert.Equal(0, first.Delivery.Sent);
+        Assert.Equal([AlertKind.Unverified], email.Sent.Select(alert => alert.Kind));
+    }
+
+    [Fact]
+    public async Task Alerts_of_one_scan_are_grouped_into_one_message_per_channel()
+    {
+        var other = "mail.example.com:465";
+        source.Expires(Host, time.Now.AddDays(20));
+        source.Expires(other, time.Now.AddDays(10));
+        var perRecipient = new RecordingNotifier("email", perRecipient: true);
+        var groupPlan = Plans.For(Plans.Tls(Host), Plans.Tls(other), Plans.Tls("vpn.example.com:443", owner: "it"));
+        source.Expires("vpn.example.com:443", time.Now.AddDays(25));
+
+        var report = await new ScanPipeline([source], [perRecipient, webhook], store, time).RunAsync(groupPlan, notify: true, CancellationToken.None);
+
+        Assert.Equal(6, report.Delivery.Sent);
+        Assert.Equal([["ana", "ana"], ["it"]], perRecipient.Digests.Select(digest => digest.Alerts.Select(alert => alert.Item.Owner)));
+        Assert.Equal(3, Assert.Single(webhook.Digests).Alerts.Count);
     }
 
     [Fact]
@@ -68,7 +156,7 @@ public class ScanPipelineTests
         email.FailWith = null;
         await RunAsync();
 
-        Assert.Single(failed.Delivery.Failures);
+        Assert.Equal([new ItemKey(ItemKind.Tls, Host)], Assert.Single(failed.Delivery.Failures).Keys);
         Assert.Single(email.Sent);
     }
 
@@ -92,6 +180,20 @@ public class ScanPipelineTests
 
         Assert.Equal(ScanOutcome.Failed, report.Entries[0].Outcome);
         Assert.Equal(0, report.Delivery.Sent);
+    }
+
+    [Fact]
+    public async Task Source_that_throws_only_fails_its_own_target()
+    {
+        var other = "mail.example.com:465";
+        source.Expires(other, time.Now.AddDays(5));
+        var twoTargets = Plans.For(Plans.Tls(Host), Plans.Tls(other));
+
+        var report = await Pipeline().RunAsync(twoTargets, notify: true, CancellationToken.None);
+
+        Assert.Equal([ScanOutcome.Failed, ScanOutcome.New], report.Entries.Select(entry => entry.Outcome));
+        Assert.StartsWith("unexpected error:", report.Entries[0].Item.LastError, StringComparison.Ordinal);
+        Assert.Equal(2, report.Delivery.Sent);
     }
 
     [Fact]
@@ -152,6 +254,19 @@ public class ScanPipelineTests
         var report = await RunAsync();
 
         Assert.Equal(["it", "ana"], report.Entries.Select(entry => entry.Item.Owner));
+    }
+
+    [Fact]
+    public async Task Alert_that_no_channel_can_deliver_is_reported()
+    {
+        source.Expires(Host, time.Now.AddDays(5));
+        var emailOnly = new RecordingNotifier("email", perRecipient: true) { RequiresEmail = true };
+
+        var report = await new ScanPipeline([source], [emailOnly], store, time)
+            .RunAsync(Plans.For(Plans.Tls(Host, owner: "finance")), notify: true, CancellationToken.None);
+
+        Assert.Equal([new ItemKey(ItemKind.Tls, Host)], report.Delivery.Unreachable);
+        Assert.Empty(emailOnly.Sent);
     }
 
     private ScanPipeline Pipeline() => new([source], [email, webhook], store, time);

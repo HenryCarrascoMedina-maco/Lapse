@@ -46,7 +46,7 @@ internal static class ReportCommand
                 var items = await runtime.Store.GetItemsAsync(cancellationToken);
                 var rows = ItemRows.ForItems(items.Values, runtime.Plan.Policy, now).ToList();
                 return await WriteAsync(destination, [.. HtmlReport.FromItems(rows)], now);
-            }, cancellationToken);
+            }, cancellationToken, withAlerts: false);
         });
         return command;
     }

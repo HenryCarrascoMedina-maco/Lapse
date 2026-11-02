@@ -1,4 +1,5 @@
 {
+  "$schema": "https://henrycarrascomedina-maco.github.io/Lapse/lapse.schema.json",
   "owners": {
     "it": { "email": "it@example.com" },
     "accounting": { "email": "accounting@example.com", "backup": "it" }

@@ -177,6 +177,28 @@ public sealed class ConfigLoaderTests : IDisposable
     private static string Minimal(string watch = """{ "hosts": [ "example.com" ] }""", string notify = "{}") =>
         $$"""{ "owners": { "it": { "email": "it@example.com" } }, "defaults": { "owner": "it" }, "watch": {{watch}}, "notify": {{notify}} }""";
 
+    [Fact]
+    public async Task Commands_without_alerts_do_not_need_the_channel_secrets()
+    {
+        var path = directory.Write("lapse.json", Minimal(notify: """{ "webhook": { "url": "${env:MISSING}" } }"""));
+
+        var result = await ConfigLoader.LoadAsync(path, Read, CancellationToken.None, withAlerts: false);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Null(result.Value.WebhookUrl);
+    }
+
+    [Fact]
+    public async Task Commands_without_alerts_still_reject_plain_text_secrets()
+    {
+        var path = directory.Write("lapse.json", Minimal(notify: """{ "webhook": { "url": "https://hooks.example.com/T0K3N" } }"""));
+
+        var result = await ConfigLoader.LoadAsync(path, Read, CancellationToken.None, withAlerts: false);
+
+        Assert.False(result.IsSuccess);
+        Assert.DoesNotContain("T0K3N", result.Error, StringComparison.Ordinal);
+    }
+
     private Task<Result<LapseConfiguration>> LoadAsync(string json) =>
         ConfigLoader.LoadAsync(directory.Write("lapse.json", json), Read, CancellationToken.None);
 

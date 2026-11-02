@@ -29,7 +29,7 @@ internal static class ListCommand
             }
 
             return ExitCodes.Success;
-        }, cancellationToken));
+        }, cancellationToken, withAlerts: false));
         return command;
     }
 }

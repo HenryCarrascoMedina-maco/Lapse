@@ -4,7 +4,13 @@ public interface INotifier
 {
     string Channel { get; }
 
-    bool CanDeliver(PlannedAlert alert);
+    // Email reaches each group of recipients separately; a chat channel is shared, so it gets one message per scan.
+    bool IsPerRecipient { get; }
 
-    Task<Result<Unit>> SendAsync(PlannedAlert alert, CancellationToken cancellationToken);
+    // Larger digests are split, so a message never exceeds what the channel accepts.
+    int MaxAlertsPerMessage { get; }
+
+    bool CanDeliver(IReadOnlyList<Owner> recipients);
+
+    Task<Result<Unit>> SendAsync(AlertDigest digest, CancellationToken cancellationToken);
 }

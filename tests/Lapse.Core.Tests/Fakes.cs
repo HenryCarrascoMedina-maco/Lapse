@@ -30,24 +30,32 @@ internal sealed class FakeSource(ItemKind kind) : ISource
     public void Fails(string target, string error) => Results[target] = Result.Failure<IReadOnlyList<Observation>>(error);
 }
 
-internal sealed class RecordingNotifier(string channel) : INotifier
+internal sealed class RecordingNotifier(string channel, bool perRecipient = false) : INotifier
 {
-    public List<PlannedAlert> Sent { get; } = [];
+    public List<AlertDigest> Digests { get; } = [];
+
+    public List<PlannedAlert> Sent => [.. Digests.SelectMany(digest => digest.Alerts)];
 
     public string? FailWith { get; set; }
 
     public string Channel => channel;
 
-    public bool CanDeliver(PlannedAlert alert) => true;
+    public bool IsPerRecipient => perRecipient;
 
-    public Task<Result<Unit>> SendAsync(PlannedAlert alert, CancellationToken cancellationToken)
+    public bool RequiresEmail { get; init; }
+
+    public int MaxAlertsPerMessage { get; init; } = 100;
+
+    public bool CanDeliver(IReadOnlyList<Owner> recipients) => !RequiresEmail || recipients.Any(owner => owner.Email is not null);
+
+    public Task<Result<Unit>> SendAsync(AlertDigest digest, CancellationToken cancellationToken)
     {
         if (FailWith is { } error)
         {
             return Task.FromResult(Result.Failure<Unit>(error));
         }
 
-        Sent.Add(alert);
+        Digests.Add(digest);
         return Task.FromResult(Result.Success(Unit.Value));
     }
 }
@@ -55,6 +63,7 @@ internal sealed class RecordingNotifier(string channel) : INotifier
 internal sealed class InMemoryItemStore : IItemStore
 {
     private readonly HashSet<AlertRecord> alerts = [];
+    private readonly Dictionary<ItemKey, List<DateTimeOffset>> history = [];
 
     public Dictionary<ItemKey, Item> Items { get; } = [];
 
@@ -67,6 +76,14 @@ internal sealed class InMemoryItemStore : IItemStore
         foreach (var reconciliation in reconciliations)
         {
             Items[reconciliation.Item.Key] = reconciliation.Item;
+            if (reconciliation.Observation is { } observation)
+            {
+                var dates = history.TryGetValue(observation.Key, out var known) ? known : history[observation.Key] = [];
+                if (dates.Count == 0 || dates[^1] != observation.ExpiresAt)
+                {
+                    dates.Add(observation.ExpiresAt);
+                }
+            }
         }
 
         return Task.CompletedTask;
@@ -80,6 +97,13 @@ internal sealed class InMemoryItemStore : IItemStore
         alerts.Add(record);
         return Task.CompletedTask;
     }
+
+    public Task<DateTimeOffset?> GetRenewedFromAsync(ItemKey key, DateTimeOffset currentExpiry, CancellationToken cancellationToken)
+    {
+        var previous = history.GetValueOrDefault(key)?.LastOrDefault(date => date != currentExpiry);
+        var warned = alerts.Any(record => record.Key == key && record.Kind is AlertKind.Threshold or AlertKind.Expired && record.ExpiresAt == previous);
+        return Task.FromResult(previous < currentExpiry && warned ? previous : null);
+    }
 }
 
 internal static class Plans
@@ -92,8 +116,9 @@ internal static class Plans
         {
             ["ana"] = new("ana", "ana@example.com", Backup: "it"),
             ["it"] = new("it", "it@example.com", Backup: null),
+            ["finance"] = new("finance", Email: null, Backup: null),
         },
         AlertPolicy.Default);
 
-    public static WatchTarget Tls(string host) => new(new ItemKey(ItemKind.Tls, host), "ana");
+    public static WatchTarget Tls(string host, string owner = "ana") => new(new ItemKey(ItemKind.Tls, host), owner);
 }

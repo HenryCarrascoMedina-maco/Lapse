@@ -15,6 +15,9 @@ public sealed class TlsSource(TimeSpan timeout) : ISource
     {
         var endpoint = HostEndpoint.Parse(target.Key.Value);
         var certificate = await TlsProbe.FetchCertificateAsync(endpoint, timeout, cancellationToken);
-        return certificate.Bind(content => CertificateReader.Observe(target.Key, target.Key.Value, content)).AsList();
+        return certificate
+            .Bind(probed => CertificateReader.Observe(target.Key, target.Key.Value, probed.Content)
+                .Map(observation => observation with { Problem = probed.Problem }))
+            .AsList();
     }
 }

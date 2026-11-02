@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://henrycarrascomedina-maco.github.io/Lapse/lapse.schema.json",
+  "title": "Lapse configuration",
+  "description": "Configuration of Lapse. Reference: https://github.com/HenryCarrascoMedina-maco/Lapse/blob/main/docs/configuration.md",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["watch"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "owners": {
+      "description": "Owners identified by a short name.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "email": { "description": "Address for email alerts.", "type": "string", "format": "email" },
+          "backup": { "description": "Another owner who also receives critical and expiration alerts.", "type": "string" }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "owner": { "description": "Owner of the items that do not name one.", "type": "string" },
+        "warnAtDays": {
+          "description": "Days before expiry when an alert is sent. Default: [30, 14, 7, 1].",
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "minItems": 1
+        },
+        "criticalDays": {
+          "description": "From here on an item is critical and the alert also reaches the backup. Default: 7.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "watch": {
+      "description": "What Lapse watches. Each section is a list; an entry can be a string or an object with its own owner.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hosts": {
+          "description": "TLS certificates as host:port (443 by default), or smtp://, imap://, pop3:// or postgres:// followed by host[:port].",
+          "type": "array",
+          "items": { "$ref": "#/$defs/target" }
+        },
+        "domains": {
+          "description": "Domain registrations, looked up through RDAP.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/target" }
+        },
+        "files": {
+          "description": "Files with the public part of a certificate: .cer, .crt, .pem or .der. Relative to the configuration folder.",
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path"],
+                "properties": {
+                  "path": { "type": "string" },
+                  "owner": { "$ref": "#/$defs/owner" }
+                }
+              }
+            ]
+          }
+        },
+        "manual": {
+          "description": "Items that cannot be discovered: licenses, contracts, insurance policies.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "expiresAt"],
+            "properties": {
+              "name": { "type": "string" },
+              "expiresAt": { "description": "Date (2026-12-24) or ISO 8601 date and time. UTC when no time zone is given.", "type": "string" },
+              "owner": { "$ref": "#/$defs/owner" }
+            }
+          }
+        },
+        "saml": {
+          "description": "HTTPS URLs of SAML metadata.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/target" }
+        },
+        "entra": {
+          "description": "Microsoft Entra ID tenants whose application secrets and certificates are watched.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tenantId", "clientId", "clientSecret"],
+            "properties": {
+              "tenantId": { "description": "Tenant ID or primary domain.", "type": "string" },
+              "clientId": { "description": "Application (client) ID of the registration Lapse uses.", "type": "string" },
+              "clientSecret": { "$ref": "#/$defs/secret" },
+              "name": { "description": "Name shown for the tenant when it cannot be read.", "type": "string" },
+              "owner": { "$ref": "#/$defs/owner" }
+            }
+          }
+        }
+      }
+    },
+    "notify": {
+      "description": "Alert channels. Without channels, scan works the same but sends no alerts.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["host"],
+          "properties": {
+            "host": { "description": "SMTP server.", "type": "string" },
+            "port": { "description": "Port. Default: 587 (STARTTLS).", "type": "integer", "minimum": 1, "maximum": 65535 },
+            "user": { "description": "User name. If omitted, mail is sent without authentication.", "type": "string" },
+            "password": { "$ref": "#/$defs/secret" },
+            "from": { "description": "Sender. Default: user.", "type": "string", "format": "email" },
+            "useTls": { "description": "Default: true. Only disable it for a local test relay.", "type": "boolean" }
+          }
+        },
+        "webhook": { "$ref": "#/$defs/postUrl" },
+        "teams": { "$ref": "#/$defs/postUrl" },
+        "telegram": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["botToken", "chatId"],
+          "properties": {
+            "botToken": { "$ref": "#/$defs/secret" },
+            "chatId": { "description": "Chat, group or channel that receives the alerts.", "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "owner": { "description": "An owner defined in owners.", "type": "string" },
+    "secret": {
+      "description": "A reference, never the value: ${env:NAME} or ${file:path}.",
+      "type": "string",
+      "pattern": "^\\$\\{(env|file):.+\\}$"
+    },
+    "postUrl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": { "$ref": "#/$defs/secret" }
+      }
+    },
+    "target": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["target"],
+          "properties": {
+            "target": { "type": "string" },
+            "owner": { "$ref": "#/$defs/owner" }
+          }
+        }
+      ]
+    }
+  }
+}

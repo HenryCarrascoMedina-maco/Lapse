@@ -17,7 +17,8 @@ public sealed class SqliteItemStoreTests : IDisposable
     public async Task Saved_items_are_read_back_intact()
     {
         var api = Item(Api, Dates.Now.AddDays(10));
-        var failing = Item(Domain, expiresAt: null) with { Status = ItemStatus.Failing, LastError = "no response" };
+        var failing = Item(Domain, expiresAt: null) with { Status = ItemStatus.Failing, LastError = "no response", FailingSince = Dates.Now.AddDays(-2) };
+        api = api with { Problem = "the certificate is not valid for the name api.example.com" };
 
         await using (var store = await OpenAsync())
         {
@@ -60,6 +61,43 @@ public sealed class SqliteItemStoreTests : IDisposable
         Assert.False(await store.WasAlertSentAsync(sent with { Channel = "webhook" }, CancellationToken.None));
         Assert.False(await store.WasAlertSentAsync(sent with { ThresholdDays = 1 }, CancellationToken.None));
         Assert.False(await store.WasAlertSentAsync(sent with { ExpiresAt = expiresAt.AddDays(90) }, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Renewal_is_from_the_previous_date_only_when_it_was_warned_about()
+    {
+        var old = Dates.Now.AddDays(5);
+        var renewed = Dates.Now.AddDays(90);
+        await using var store = await OpenAsync();
+        await store.ReplaceInventoryAsync([Reconciled(Item(Api, old))], CancellationToken.None);
+        await store.ReplaceInventoryAsync([Reconciled(Item(Api, renewed) with { LastScannedAt = Dates.Now.AddDays(1) })], CancellationToken.None);
+
+        Assert.Null(await store.GetRenewedFromAsync(Api, renewed, CancellationToken.None));
+
+        await store.RecordAlertSentAsync(new AlertRecord(Api, AlertKind.Threshold, 7, old, "email"), Dates.Now, CancellationToken.None);
+
+        Assert.Equal(old, await store.GetRenewedFromAsync(Api, renewed, CancellationToken.None));
+        Assert.Null(await store.GetRenewedFromAsync(Api, old, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task History_records_new_dates_instead_of_every_scan()
+    {
+        var path = directory.File("lapse.db");
+        await using (var store = await OpenAsync())
+        {
+            var first = Item(Api, Dates.Now.AddDays(5));
+            await store.ReplaceInventoryAsync([Reconciled(first)], CancellationToken.None);
+            await store.ReplaceInventoryAsync([Reconciled(first with { LastScannedAt = Dates.Now.AddHours(6) })], CancellationToken.None);
+            await store.ReplaceInventoryAsync([Reconciled(Item(Api, Dates.Now.AddDays(90)) with { LastScannedAt = Dates.Now.AddDays(1) })], CancellationToken.None);
+        }
+
+        await using var connection = new SqliteConnection($"Data Source={path};Pooling=False");
+        await connection.OpenAsync();
+        await using var count = connection.CreateCommand();
+        count.CommandText = "SELECT COUNT(*) FROM observations";
+
+        Assert.Equal(2L, await count.ExecuteScalarAsync());
     }
 
     [Fact]

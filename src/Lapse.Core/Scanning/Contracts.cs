@@ -19,6 +19,9 @@ public interface IItemStore
     Task<bool> WasAlertSentAsync(AlertRecord record, CancellationToken cancellationToken);
 
     Task RecordAlertSentAsync(AlertRecord record, DateTimeOffset sentAt, CancellationToken cancellationToken);
+
+    // The expiry date observed before currentExpiry, if it was earlier and a threshold or expired alert was sent for it.
+    Task<DateTimeOffset?> GetRenewedFromAsync(ItemKey key, DateTimeOffset currentExpiry, CancellationToken cancellationToken);
 }
 
 public static class ObservationResults
